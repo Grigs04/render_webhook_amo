@@ -19,14 +19,16 @@ async def ping():
 
 @router.post("/amo/create-invoice")
 async def create_invoice_from_amo(request: Request):
-    try:
-        payload = await request.json()
-        print(payload)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON")
-
-    logger.info("📩 Webhook from amoCRM received")
-    logger.info(payload)
+    # try:
+    #     payload = await request.json()
+    #     print(payload)
+    # except Exception:
+    #     raise HTTPException(status_code=400, detail="Invalid JSON")
+    #
+    # logger.info("📩 Webhook from amoCRM received")
+    # logger.info(payload)
+    body = request.body()
+    print(body)
 
     return {
         "status": "ok",
