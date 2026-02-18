@@ -27,8 +27,11 @@ async def create_invoice_from_amo(request: Request):
     #
     # logger.info("📩 Webhook from amoCRM received")
     # logger.info(payload)
-    body = request.body()
-    print(body)
+    body = await request.body()
+    headers = dict(request.headers)
+
+    print("HEADERS:", headers)
+    print("RAW BODY:", body.decode("utf-8", errors="ignore"))
 
     return {
         "status": "ok",
