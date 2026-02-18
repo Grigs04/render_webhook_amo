@@ -1,32 +1,13 @@
 import json
-import os
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, Request, HTTPException, APIRouter
-from dotenv import load_dotenv
 import logging
+from fastapi import APIRouter, Request, HTTPException
 
 router = APIRouter()
-
 
 # -------------------- LOGGING --------------------
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# -------------------- ENV --------------------
-
-load_dotenv()
-
-# -------------------- APP LIFESPAN --------------------
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("🚀 Application started")
-    yield
-    logger.info("🛑 Application stopped")
-
-app = FastAPI(lifespan=lifespan)
 
 # -------------------- HEALTHCHECK --------------------
 
@@ -36,21 +17,8 @@ async def ping():
 
 # -------------------- AMOCRM WEBHOOK --------------------
 
-@app.post("/amo/create-invoice")
+@router.post("/amo/create-invoice")
 async def create_invoice_from_amo(request: Request):
-    """
-    Вебхук от amoCRM.
-    Сейчас:
-    - принимаем запрос
-    - логируем payload
-    - возвращаем 200 OK
-
-    Позже здесь появится:
-    - запрос в amoCRM API
-    - вызов API банка
-    """
-
-
     try:
         payload = await request.json()
         print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -59,10 +27,6 @@ async def create_invoice_from_amo(request: Request):
 
     logger.info("📩 Webhook from amoCRM received")
     logger.info(payload)
-
-    # TODO:
-    # lead_id = payload["lead"]["id"]
-    # дальше логика
 
     return {
         "status": "ok",
