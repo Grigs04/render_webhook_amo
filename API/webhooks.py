@@ -21,7 +21,7 @@ async def ping():
 async def create_invoice_from_amo(request: Request):
     try:
         payload = await request.json()
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        print(payload)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
