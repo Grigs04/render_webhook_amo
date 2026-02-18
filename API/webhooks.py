@@ -1,3 +1,4 @@
+import json
 import os
 from contextlib import asynccontextmanager
 
@@ -6,10 +7,6 @@ from dotenv import load_dotenv
 import logging
 
 router = APIRouter()
-
-@router.post("/amo/create-invoice")
-async def create_invoice():
-    return {"ok": True}
 
 
 # -------------------- LOGGING --------------------
@@ -33,7 +30,7 @@ app = FastAPI(lifespan=lifespan)
 
 # -------------------- HEALTHCHECK --------------------
 
-@app.get("/ping")
+@router.get("/ping")
 async def ping():
     return {"status": "ok"}
 
@@ -56,6 +53,7 @@ async def create_invoice_from_amo(request: Request):
 
     try:
         payload = await request.json()
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
