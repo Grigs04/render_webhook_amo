@@ -1,9 +1,16 @@
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, APIRouter
 from dotenv import load_dotenv
 import logging
+
+router = APIRouter()
+
+@router.post("/amo/create-invoice")
+async def create_invoice():
+    return {"ok": True}
+
 
 # -------------------- LOGGING --------------------
 

@@ -1,7 +1,6 @@
 from fastapi import FastAPI
+from API.webhooks import router as webhook_router
 
 app = FastAPI()
 
-@app.get("/ping")
-async def ping():
-    return {"status": "ok"}
+app.include_router(webhook_router)
