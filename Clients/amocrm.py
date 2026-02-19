@@ -1,9 +1,38 @@
-import requests
+import httpx
 import json
+import os
+from load_dotenv import load_dotenv
+from pydantic import BaseModel
+from typing import Optional, List
+from Clients.tochka import create_invoice
 
-headers = {
-    'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6Ijk0ZTM1ZjA1ZTRlODI2NTJjNjZmZjc4YmIzMjUyNjc1ZGQwNDI4NTM0YmQ3ZTc5ZmQyYzdiMGE3YzQwYTA1MmRjZDg2YzE2YTI4MGQwZGZjIn0.eyJhdWQiOiIzNWU3MGY0MS00MDBlLTQ0MTUtODU0My0wYjc0NDU2ZWM1OWQiLCJqdGkiOiI5NGUzNWYwNWU0ZTgyNjUyYzY2ZmY3OGJiMzI1MjY3NWRkMDQyODUzNGJkN2U3OWZkMmM3YjBhN2M0MGEwNTJkY2Q4NmMxNmEyODBkMGRmYyIsImlhdCI6MTc3MTQyNTk1MSwibmJmIjoxNzcxNDI1OTUxLCJleHAiOjE5MjkxMzkyMDAsInN1YiI6IjEyMzAxMTE0IiwiZ3JhbnRfdHlwZSI6IiIsImFjY291bnRfaWQiOjMyMzE4NzM0LCJiYXNlX2RvbWFpbiI6ImFtb2NybS5ydSIsInZlcnNpb24iOjIsInNjb3BlcyI6WyJjcm0iLCJmaWxlcyIsImZpbGVzX2RlbGV0ZSIsIm5vdGlmaWNhdGlvbnMiLCJwdXNoX25vdGlmaWNhdGlvbnMiXSwiaGFzaF91dWlkIjoiODk1MmY1MGItNmI0Ni00Y2VlLTk2ZWMtOTlkZWU0ZGRmNzkxIiwiYXBpX2RvbWFpbiI6ImFwaS1iLmFtb2NybS5ydSJ9.WOgzEnTvAvUMcCQ2WMvwnwGkH6T65p1XdJC6z6m2BBZ_T8oN_IUl6rxjpezf927S5Od-I3cgU8JotrfWnc_e_8-CRKuSmZVWlOiEa8Z34nsAjuRMyo0Mza9GjXuyYq0QDlRBGNoqaiJv9NyBWGcSBveDSXmiv-emUGXhSOkgN87s8h1Z9tehNNu5iq7NKzeETogY6MhI05ZhfAaJ02rxWvcPRkT0OHLX1P1X83cICOt2mhI50QKgsMnZxBMhGeCphfIoK46N900F_aIJpS9-CwdMze45spjwRFtXiquY6P0GnWuoimmRm2dq2bzhFIuFuPH3D3kbaqVHiH_AYUbinw',
-    'Content-Type': 'application/json'
-}
-response = requests.get('https://mafiatimeru.amocrm.ru/api/v4/leads/37131731', headers=headers)
-print(json.dumps(response.json(), indent=2, ensure_ascii=False))
+load_dotenv()
+AMO_BASE_URL = os.getenv('AMO_BASE_URL')
+AMO_TOKEN = os.getenv('AMO_TOKEN')
+
+async def get_entity_data(entity_id: int):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url=f'{AMO_BASE_URL}/leads/{entity_id}',
+                                    headers={'Authorization': f'Bearer {AMO_TOKEN}',
+                                             'Content-Type': 'application/json'})
+        response.raise_for_status()
+        try:
+            company_id = response.json().get('_embedded', {}).get('companies')[0].get('id')
+            price = response.json().get('price', 0)
+            if price == 0:
+                raise 'Ошибка! Заполните данные цены в сделке'
+        except Exception as e:
+            raise f'{e}\nОшибка! Проверьте наличие данных у компании сделки'
+        await get_company_data(company_id, price)
+
+
+
+async def get_company_data(company_id: int, price: float):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url=f'{AMO_BASE_URL}/companies/{company_id}',
+                                    headers={'Authorization': f'Bearer {AMO_TOKEN}',
+                                             'Content-Type': 'application/json'})
+        response.raise_for_status()
+        company_raw_data = response.json().get('custom_fields_values', {})[0].get('values')[0].get('value')
+
+        await create_invoice(company_raw_data, price)
