@@ -10,7 +10,7 @@ async def ping():
 
 @router.post("/amo/create-invoice")
 async def create_invoice_from_amo(request: Request):
-    print(request.headers)
+    print(request.json())
     # data = await request.json()
     # try:
     #     entity_id = data.get('data', [{}])[0].get('entity_id')
