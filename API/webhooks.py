@@ -10,19 +10,20 @@ async def ping():
 
 @router.post("/amo/create-invoice")
 async def create_invoice_from_amo(request: Request):
-    print(request.json())
-    # data = await request.json()
-    # try:
-    #     entity_id = data.get('data', [{}])[0].get('entity_id')
-    #     account_id = data.get('account_id')
-    # except Exception as e:
-    #     raise HTTPException(status_code=400, detail=str(e))
-    #
-    # await runner(entity_id)
-    #
-    # return {
-    #     "status": "ok",
-    #     "message": "Webhook received",
-    #     "entity_id": entity_id
-    # }
+    try:
+        data = await request.form()
+        account = json.loads(data.get('account'))
+        lead = json.loads(data.get('leads'))
+        entity_id = lead.get('add')[0].get('id')
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    await runner(entity_id)
+
+    return {
+        "status": "ok",
+        "message": "Webhook received",
+        "entity_id": entity_id
+    }
 
