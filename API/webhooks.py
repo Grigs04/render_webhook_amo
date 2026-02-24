@@ -10,14 +10,11 @@ async def ping():
 
 @router.post("/amo/create-invoice")
 async def create_invoice_from_amo(request: Request):
-    try:
-        data = await request.form()
-        account = json.loads(data.get('account'))
-        lead = json.loads(data.get('leads'))
-        entity_id = lead.get('add')[0].get('id')
+    data = await request.form()
+    account = json.loads(data.get('account'))
+    lead = json.loads(data.get('leads'))
+    entity_id = lead.get('add')[0].get('id')
 
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
     await runner(entity_id)
 
