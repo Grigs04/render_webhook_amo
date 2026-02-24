@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 from load_dotenv import load_dotenv
 import os
@@ -13,6 +14,8 @@ CUSTOMER_CODE = os.getenv('CUSTOMER_CODE')
 TAX_CODE = os.getenv('TAX_CODE')
 TOCHKA_BASE_URL = os.getenv('TOCHKA_BASE_URL')
 
+client = httpx.AsyncClient()
+
 class CompanyData(BaseModel):
     secondSideName: str
     taxCode: str
@@ -21,11 +24,18 @@ class CompanyData(BaseModel):
     type: str
 
 async def create_invoice(company, price: float):
+    invoice_num = str(randint(1000, 9999))
+    payment_date = (date.today() + timedelta(days=7)).isoformat()
+
+    if not all(company.get(field) for field in ['name', 'vat_id']):
+        raise Clients.amocrm.AmoDataError(message='Не заполнены инн или название организации', code='INCOMPLETE_COMPANY_DATA')
+
     company_data = CompanyData(secondSideName=company.get('name'),
                                taxCode=company.get('vat_id'),
                                legalAddress=company.get('address'),
                                kpp=company.get('kpp'),
-                               type=('company', 'ip')[company.get('name')[:2] == 'ИП'])
+                               type='ip' if company.get('name', '').startswith('ИП') else 'company')
+
 
     payload = {
         "Data": {
@@ -47,15 +57,25 @@ async def create_invoice(company, price: float):
                     ],
                     "totalAmount": price,
                     "totalNds": "0",
-                    "number": str(randint(1000, 9999)),
-                    "paymentExpiryDate": (date.today() + timedelta(days=7)).isoformat()}
+                    "number": invoice_num,
+                    "paymentExpiryDate": payment_date}
             }
         }
     }
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url=f'{TOCHKA_BASE_URL}/bills',
-                                     json=payload,
-                                     headers={'Authorization': f'Bearer {TOCHKA_TOKEN}',
-                                              'Accept': 'application/json',
-                                              'Content-Type': 'application/json'})
-        response.raise_for_status()
+
+    response = await client.post(url=f'{TOCHKA_BASE_URL}/bills',
+                                 json=payload,
+                                 headers={'Authorization': f'Bearer {TOCHKA_TOKEN}',
+                                          'Accept': 'application/json'})
+    response.raise_for_status()
+    invoice_id = response.json().get('Data', {}).get('documentId')
+    return invoice_id, invoice_num
+
+async def get_invoice(invoice_id: str):
+    response = await client.get(url=f'{TOCHKA_BASE_URL}/bills/{CUSTOMER_CODE}/{invoice_id}/file',
+                                 headers={'Authorization': f'Bearer {TOCHKA_TOKEN}',
+                                          'Accept': 'application/pdf'})
+
+    response.raise_for_status()
+
+    return response.read()
