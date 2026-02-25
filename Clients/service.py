@@ -23,4 +23,4 @@ async def runner(order_id: int):
             await amo.notify_manager(order_id, 'Необходимо заполнить поля "ИНН" и имя Юр. лица')
 
     except Exception as e:
-        await amo.notify_manager(order_id, e.args[0])
+        await amo.notify_manager(order_id, str(e.args[0]))
