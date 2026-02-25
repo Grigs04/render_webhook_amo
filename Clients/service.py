@@ -10,6 +10,7 @@ async def runner(order_id: int):
         bytes_invoice_file = await tochka.get_invoice(invoice_id)
         uuid = await amo.add_file_in_crm(bytes_invoice_file, invoice_num)
         await amo.link_file_order(order_id=order_id, uuid=uuid)
+        await amo.add_tochka_uuid(order_id=order_id, uuid=invoice_id)
 
     except amo.AmoDataError as e:
         if e.code == 'EMPTY_PRICE':
