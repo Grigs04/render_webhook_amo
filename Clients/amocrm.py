@@ -100,3 +100,25 @@ async def link_file_order(order_id, uuid):
                                 )
     response.raise_for_status()
 
+async def add_tochka_uuid(order_id, uuid):
+    response = await client.patch(url=f'{AMO_BASE_URL}/leads/{order_id}',
+                                  headers={'Authorization': f'Bearer {AMO_TOKEN}',
+                                           'Content-Type': 'application/json'},
+                                  json=[
+                                      {
+                                          "custom_fields_values": [
+                                              {
+                                                  'field_id': 825929,
+                                                  'values': [
+                                                      {
+                                                      'value': uuid
+                                                      }
+                                                  ]
+                                              }
+                                          ]
+                                      }
+                                  ]
+                                  )
+
+    response.raise_for_status()
+
