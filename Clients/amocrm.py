@@ -3,6 +3,7 @@ import json
 import os
 from load_dotenv import load_dotenv
 from datetime import date
+from Clients.tochka import check_status
 
 load_dotenv()
 AMO_BASE_URL = os.getenv('AMO_BASE_URL')
@@ -118,4 +119,38 @@ async def add_tochka_uuid(order_id, uuid):
                                   )
 
     response.raise_for_status()
+
+
+async def get_orders_uuid():
+    response = await client.get(url=f'{AMO_BASE_URL}/leads?filter[status]=75366150', # ДОКУМЕНТЫ/ПРЕДОПЛАТА
+                                  headers={'Authorization': f'Bearer {AMO_TOKEN}',
+                                           'Content-Type': 'application/json'})
+    response.raise_for_status()
+    response = response.json()
+    lead_uuid = None
+    for lead in response['_embedded'].get('leads', []):
+
+        custom_fields = lead['custom_fields_values']
+        if not custom_fields:
+            continue
+
+        for field in custom_fields:
+            if field['field_name'] == 'UUID_invoice':
+                lead_uuid = field['values'][0]['value']
+                break
+        if lead_uuid is not None:
+            payment_status = check_status(lead_uuid)
+            if payment_status == 'payment_paid':
+                await change_lead_status(lead['id'])
+
+
+async def change_lead_status(order_id):
+    response = await client.patch(url=f'{AMO_BASE_URL}/leads/{order_id}',
+                                  headers={'Authorization': f'Bearer {AMO_TOKEN}',
+                                           'Content-Type': 'application/json'},
+                                  json={'id': order_id,
+                                        'status_id': 78036790}) # ОПЛАЧЕН
+    response.raise_for_status()
+
+
 

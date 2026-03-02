@@ -1,6 +1,6 @@
 import json
 from fastapi import APIRouter, Request, HTTPException
-from Clients.service import runner
+from Services.invoise_service import runner, checkeer
 
 router = APIRouter()
 
@@ -22,4 +22,11 @@ async def create_invoice_from_amo(request: Request):
         "message": "Webhook received",
         "entity_id": entity_id
     }
+
+@router.post('/amo/check_invoice_status')
+async def check_invoice_status():
+    # form = await request.form()
+    #
+    # entity_id = int(form.get('leads[add][0][id]'))
+    await checkeer()
 

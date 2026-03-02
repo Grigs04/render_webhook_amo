@@ -79,3 +79,14 @@ async def get_invoice(invoice_id: str):
     response.raise_for_status()
 
     return response.read()
+
+async def check_status(uuid):
+    response = await client.get(url=f'{TOCHKA_BASE_URL}/bills/{CUSTOMER_CODE}/{uuid}/payment-status',
+                                 headers={'Authorization': f'Bearer {TOCHKA_TOKEN}',
+                                          'Accept': 'application/pdf'})
+    response.raise_for_status()
+
+    response = response.json()
+
+    result = response.get('Data', {}).get('paymentStatus')
+    return result
