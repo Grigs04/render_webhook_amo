@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import date, timedelta
 from random import randint
+import json
 
 load_dotenv()
 TOCHKA_TOKEN = os.getenv('TOCHKA_TOKEN')
@@ -23,8 +24,7 @@ class CompanyData(BaseModel):
     kpp: Optional[str]
     type: str
 
-async def create_invoice(company, price: float):
-    invoice_num = str(randint(1000, 9999))
+async def create_invoice(company, price: float, order_id: str):
     payment_date = (date.today() + timedelta(days=7)).isoformat()
 
     if not all(company.get(field) for field in ['name', 'vat_id']):
@@ -57,7 +57,7 @@ async def create_invoice(company, price: float):
                     ],
                     "totalAmount": price,
                     "totalNds": "0",
-                    "number": invoice_num,
+                    "number": order_id,
                     "paymentExpiryDate": payment_date}
             }
         }
@@ -69,7 +69,8 @@ async def create_invoice(company, price: float):
                                           'Accept': 'application/json'})
     response.raise_for_status()
     invoice_id = response.json().get('Data', {}).get('documentId')
-    return invoice_id, invoice_num
+
+    return invoice_id
 
 async def get_invoice(invoice_id: str):
     response = await client.get(url=f'{TOCHKA_BASE_URL}/bills/{CUSTOMER_CODE}/{invoice_id}/file',
@@ -90,3 +91,19 @@ async def check_status(uuid):
 
     result = response.get('Data', {}).get('paymentStatus')
     return result
+
+async def create_act(parent_uuid: str | None = None):
+    response = await client.post(url=f'{TOCHKA_BASE_URL}/closing-documents',
+                           headers={'Authorization': f'Bearer {TOCHKA_TOKEN}',
+                                    'Accept': 'application/pdf'},
+                           json={
+        "Data": {
+            "accountId": ACCOUNT_NUM,
+            "customerCode": CUSTOMER_CODE,
+            'documentId': '7ab2d914-296b-462a-9b9b-ef07ca143108',
+            "Content": "Act"
+        }
+                           }
+                           )
+
+    print(json.dumps(response.json(), indent=2, ensure_ascii=False))

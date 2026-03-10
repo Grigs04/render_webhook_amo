@@ -16,6 +16,8 @@ class AmoDataError(Exception):
         self.code = code
         super().__init__(message)
 
+
+
 async def notify_manager(order_id: int, text: str):
     response = await client.post(url=f'{AMO_BASE_URL}/leads/{order_id}/notes',
                                  headers={'Authorization': f'Bearer {AMO_TOKEN}',
@@ -70,7 +72,7 @@ async def get_company_data(company_id: int):
 
     return company_raw_data
 
-async def add_file_in_crm(file, invoice_num):
+async def add_file_in_crm(file, invoice_num: str):
     response = await client.post(url='https://drive-b.amocrm.ru/v1.0/sessions',
                                  headers={'Authorization': f'Bearer {AMO_TOKEN}',
                                           'Content-Type': 'application/json'},

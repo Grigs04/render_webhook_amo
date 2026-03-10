@@ -28,5 +28,11 @@ async def check_invoice_status():
     # form = await request.form()
     #
     # entity_id = int(form.get('leads[add][0][id]'))
-    await checkeer()
+    await checkker()
+
+@router.post('/amo/create-agreement')
+async def create_agreement(request: Request):
+    form = await request.form()
+    entity_id = int(form.get('leads[add][0][id]'))
+
 

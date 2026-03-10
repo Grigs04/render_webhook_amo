@@ -6,9 +6,9 @@ async def runner(order_id: int):
     try:
         company_id, price = await amo.get_entity_data(order_id)
         company_raw_dara = await amo.get_company_data(company_id)
-        invoice_id, invoice_num = await tochka.create_invoice(company_raw_dara, price)
+        invoice_id = await tochka.create_invoice(company_raw_dara, price, order_id)
         bytes_invoice_file = await tochka.get_invoice(invoice_id)
-        uuid = await amo.add_file_in_crm(bytes_invoice_file, invoice_num)
+        uuid = await amo.add_file_in_crm(bytes_invoice_file, order_id)
         await amo.link_file_order(order_id=order_id, uuid=uuid)
         await amo.add_tochka_uuid(order_id=order_id, uuid=invoice_id)
 
