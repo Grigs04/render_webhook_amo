@@ -1,15 +1,14 @@
 import httpx
-import json
 import os
-from load_dotenv import load_dotenv
 from datetime import date
+from load_dotenv import load_dotenv
 from Clients.tochka import check_status
 
 load_dotenv()
 AMO_BASE_URL = os.getenv('AMO_BASE_URL')
 AMO_TOKEN = os.getenv('AMO_TOKEN')
 
-client = httpx.AsyncClient()
+client = httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0))
 
 class AmoDataError(Exception):
     def __init__(self, message: str, code: str | None = None):
@@ -46,7 +45,12 @@ async def get_entity_data(entity_id: int):
         if price == 0:
             raise AmoDataError(message='Пустое поле цены', code='EMPTY_PRICE')
 
-        transfer = (t['values'][0]['value'] for t in data.get('custom_fields_values') if t['field_name'] == 'Трансфер')
+        custom_fields = data.get('custom_fields_values') or []
+        transfer = (
+            t['values'][0]['value']
+            for t in custom_fields
+            if t.get('field_name') == '\u0422\u0440\u0430\u043d\u0441\u0444\u0435\u0440' and t.get('values')
+        )
         total_price = price + sum(map(int, transfer))
 
     except IndexError:
@@ -64,13 +68,16 @@ async def get_company_data(company_id: int):
                                     headers={'Authorization': f'Bearer {AMO_TOKEN}',
                                              'Content-Type': 'application/json'})
         response.raise_for_status()
-        company_raw_data = response.json().get('custom_fields_values', {})[0].get('values')[0].get('value')
+        custom_fields = response.json().get('custom_fields_values') or []
+        company_raw_data = custom_fields[0].get('values')[0].get('value')
 
     except TypeError:
-        raise AmoDataError(message='Сделка карточки не заполнена или трансфер не является числовым значением',
-                           code='INCORRECT_FIELDS_DATA')
+        raise AmoDataError(message='Company data is missing or invalid', code='INCORRECT_FIELDS_DATA')
+    except IndexError:
+        raise AmoDataError(message='Empty company fields', code='EMPTY_COMPANY_DATA')
 
     return company_raw_data
+
 
 async def add_file_in_crm(file, invoice_num: str):
     response = await client.post(url='https://drive-b.amocrm.ru/v1.0/sessions',
@@ -129,8 +136,8 @@ async def get_orders_uuid():
                                            'Content-Type': 'application/json'})
     response.raise_for_status()
     response = response.json()
-    lead_uuid = None
     for lead in response['_embedded'].get('leads', []):
+        lead_uuid = None
 
         custom_fields = lead['custom_fields_values']
         if not custom_fields:
@@ -141,7 +148,7 @@ async def get_orders_uuid():
                 lead_uuid = field['values'][0]['value']
                 break
         if lead_uuid is not None:
-            payment_status = check_status(lead_uuid)
+            payment_status = await check_status(lead_uuid)
             if payment_status == 'payment_paid':
                 await change_lead_status(lead['id'])
 

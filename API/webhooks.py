@@ -1,4 +1,3 @@
-import json
 from fastapi import APIRouter, Request, HTTPException
 from Services.invoise_services import runner, checkker
 
@@ -12,7 +11,10 @@ async def ping():
 async def create_invoice_from_amo(request: Request):
     form = await request.form()
 
-    entity_id = int(form.get('leads[add][0][id]'))
+    raw_id = form.get('leads[add][0][id]')
+    if raw_id is None:
+        raise HTTPException(status_code=400, detail="Missing lead id")
+    entity_id = int(raw_id)
 
 
     await runner(entity_id)
@@ -29,10 +31,8 @@ async def check_invoice_status():
     #
     # entity_id = int(form.get('leads[add][0][id]'))
     await checkker()
+    return {"status": "ok"}
 
 @router.post('/amo/create-agreement')
 async def create_agreement(request: Request):
-    form = await request.form()
-    entity_id = int(form.get('leads[add][0][id]'))
-
-@router.post('/amo/update_table')
+    raise HTTPException(status_code=501, detail="Not implemented")

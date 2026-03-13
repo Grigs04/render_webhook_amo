@@ -1,11 +1,9 @@
-import asyncio
 import httpx
 from load_dotenv import load_dotenv
 import os
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date, timedelta
-from random import randint
 import json
 
 load_dotenv()
@@ -15,7 +13,7 @@ CUSTOMER_CODE = os.getenv('CUSTOMER_CODE')
 TAX_CODE = os.getenv('TAX_CODE')
 TOCHKA_BASE_URL = os.getenv('TOCHKA_BASE_URL')
 
-client = httpx.AsyncClient()
+client = httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=5.0))
 
 class CompanyData(BaseModel):
     secondSideName: str
@@ -28,7 +26,8 @@ async def create_invoice(company, price: float, order_id: str):
     payment_date = (date.today() + timedelta(days=7)).isoformat()
 
     if not all(company.get(field) for field in ['name', 'vat_id']):
-        raise Clients.amocrm.AmoDataError(message='Не заполнены инн или название организации', code='INCOMPLETE_COMPANY_DATA')
+        from Clients.amocrm import AmoDataError
+        raise AmoDataError(message='Missing company name or VAT ID', code='INCOMPLETE_COMPANY_DATA')
 
     company_data = CompanyData(secondSideName=company.get('name'),
                                taxCode=company.get('vat_id'),
@@ -79,7 +78,7 @@ async def get_invoice(invoice_id: str):
 
     response.raise_for_status()
 
-    return response.read()
+    return await response.aread()
 
 async def check_status(uuid):
     response = await client.get(url=f'{TOCHKA_BASE_URL}/bills/{CUSTOMER_CODE}/{uuid}/payment-status',
