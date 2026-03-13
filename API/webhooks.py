@@ -35,4 +35,4 @@ async def create_agreement(request: Request):
     form = await request.form()
     entity_id = int(form.get('leads[add][0][id]'))
 
-
+@router.post('/amo/update_table')

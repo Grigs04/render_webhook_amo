@@ -26,4 +26,4 @@ async def runner(order_id: int):
         await amo.notify_manager(order_id, str(e.args[0]))
 
 async def checkker():
-    await amo.get_orderd_uuid
+    await amo.get_orders_uuid
