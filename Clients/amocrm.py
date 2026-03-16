@@ -41,7 +41,7 @@ async def get_entity_data(entity_id: int):
 
         price = data.get('price', 0)
         if price == 0:
-            raise AmoDataError(message='РџСѓСЃС‚РѕРµ РїРѕР»Рµ С†РµРЅС‹', code='EMPTY_PRICE')
+            raise AmoDataError(message='Пустое поле цены', code='EMPTY_PRICE')
 
         custom_fields = data.get('custom_fields_values') or []
         transfer = (
@@ -52,10 +52,10 @@ async def get_entity_data(entity_id: int):
         total_price = price + sum(map(int, transfer))
 
     except IndexError:
-        raise AmoDataError(message='РџСѓСЃС‚С‹Рµ РїРѕР»СЏ РєРѕРјРїР°РЅРёРё', code='EMPTY_COMPANY_DATA')
+        raise AmoDataError(message='Пустые поля компании', code='EMPTY_COMPANY_DATA')
 
     except (TypeError, ValueError):
-        raise AmoDataError(message='РЎРґРµР»РєР° РєР°СЂС‚РѕС‡РєРё РЅРµ Р·Р°РїРѕР»РЅРµРЅР° РёР»Рё С‚СЂР°РЅСЃС„РµСЂ РЅРµ СЏРІР»СЏРµС‚СЃСЏ С‡РёСЃР»РѕРІС‹Рј Р·РЅР°С‡РµРЅРёРµРј', code='INCORRECT_FIELDS_DATA')
+        raise AmoDataError(message='Сделка карточки не заполнена или трансфер не является числовым значением', code='INCORRECT_FIELDS_DATA')
     return company_id, total_price
 
 
@@ -163,7 +163,7 @@ async def change_lead_status(order_id):
     response = await client.patch(url=f'{AMO_BASE_URL}/leads/{order_id}',
                                   headers=HEADERS,
                                   json={'id': order_id,
-                                        'status_id': 78036790}) # РћРџР›РђР§Р•Рќ
+                                        'status_id': 78036790}) # ОПЛАЧЕН
     response.raise_for_status()
 
 
