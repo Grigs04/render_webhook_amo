@@ -1,10 +1,10 @@
-import os
+﻿import os
 import time
 from datetime import datetime
 from typing import Dict, Iterable, Tuple
 
 import httpx
-from load_dotenv import load_dotenv
+from dotenv import load_dotenv
 
 load_dotenv()
 

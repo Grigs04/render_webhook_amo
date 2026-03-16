@@ -1,7 +1,7 @@
 ﻿import httpx
 import anyio
 import os
-from load_dotenv import load_dotenv
+from dotenv import load_dotenv
 from Clients.tochka import check_status
 
 load_dotenv()

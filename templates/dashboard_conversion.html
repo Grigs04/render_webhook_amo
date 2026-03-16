@@ -1,0 +1,357 @@
+﻿<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Конверсия менеджеров за 6 месяцев</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f4ef;
+        --card: #ffffff;
+        --accent: #0b5fff;
+        --muted: #6a6a6a;
+        --border: #e5e2dc;
+      }
+      body {
+        margin: 0;
+        font-family: "Montserrat", system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top, #ffffff 0%, #f6f4ef 60%, #efece6 100%);
+        color: #1f1f1f;
+      }
+      header {
+        padding: 28px 32px 8px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 28px;
+        letter-spacing: 0.2px;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .wrap {
+        padding: 18px 32px 40px;
+        overflow-x: auto;
+      }
+      .chart-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      table {
+        border-collapse: collapse;
+        min-width: 1000px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
+      }
+      th, td {
+        border: 1px solid var(--border);
+        padding: 8px 10px;
+        text-align: center;
+        font-size: 13px;
+      }
+      th {
+        background: #f0f3ff;
+        font-weight: 600;
+      }
+      th.sticky {
+        position: sticky;
+        left: 0;
+        background: #f0f3ff;
+        z-index: 2;
+      }
+      td.sticky {
+        position: sticky;
+        left: 0;
+        background: #fff;
+        text-align: left;
+        font-weight: 600;
+        z-index: 1;
+      }
+      .ratio {
+        font-weight: 700;
+        color: var(--accent);
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .total-row td {
+        background: #fff7e6;
+        font-weight: 600;
+      }
+      .cell-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .header-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .header-tools {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        justify-content: center;
+      }
+      .header-tools select {
+        padding: 4px 6px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 12px;
+      }
+      .header-tools input[type="checkbox"] {
+        transform: scale(1.05);
+      }
+      td.cell-high {
+        background: #e7f6ed !important;
+      }
+      td.cell-low {
+        background: #fde8e7 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Конверсия менеджеров за последние 6 месяцев</h1>
+      <div class="subtitle">Разбивка по неделям (26 недель)</div>
+    </header>
+    <div class="wrap">
+      <div class="chart-card">
+        <canvas id="conversionChart" width="1400" height="360"></canvas>
+      </div>
+      <table id="dataTable">
+        <thead>
+          <tr>
+            <th class="sticky">Неделя</th>
+            <th>Итого</th>
+          </tr>
+        </thead>
+        <tbody>
+        </tbody>
+      </table>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script>
+      const userList = {{ user_list | tojson }};
+      const sortOptions = [
+        { value: "total", label: "Всего" },
+        { value: "success", label: "Успешные" },
+        { value: "unsuccessful", label: "Неуспешные" },
+        { value: "ratio", label: "Конверсия" },
+        { value: "revenue", label: "Выручка" },
+      ];
+
+      const sortById = "sort_by";
+      const sortDirId = "sort_dir";
+      const tableBody = document.querySelector("#dataTable tbody");
+      const chartCanvas = document.getElementById("conversionChart");
+
+      let chartInstance = null;
+      let selectedManagerIds = new Set(userList.map((u) => String(u.id)));
+
+      function getSelectedManagers() {
+        return Array.from(selectedManagerIds);
+      }
+
+      function buildQuery() {
+        const params = new URLSearchParams();
+        const managerIds = getSelectedManagers();
+        if (managerIds.length) params.set("managers", managerIds.join(","));
+        params.set("sort_by", document.getElementById(sortById).value);
+        params.set("sort_dir", document.getElementById(sortDirId).value);
+        return params.toString();
+      }
+
+      function renderHeader(managers) {
+        const headRow = document.querySelector("#dataTable thead tr");
+        headRow.innerHTML = "<th class=\"sticky\">Неделя</th>";
+
+        const nameToId = new Map(userList.map((u) => [u.name, String(u.id)]));
+
+        managers.forEach((m) => {
+          const managerId = nameToId.get(m) || "";
+          const checked = managerId && selectedManagerIds.has(managerId) ? "checked" : "";
+          headRow.innerHTML += `
+            <th>
+              <div class="header-cell">
+                <div>${m}</div>
+                <div class="header-tools">
+                  <input type="checkbox" data-manager="${managerId}" ${checked} />
+                </div>
+              </div>
+            </th>`;
+        });
+
+        headRow.innerHTML += `
+          <th>
+            <div class="header-cell">
+              <div>Итого</div>
+              <div class="header-tools">
+                <select id="${sortById}">
+                  ${sortOptions.map((o) => `<option value="${o.value}">${o.label}</option>`).join("")}
+                </select>
+                <select id="${sortDirId}">
+                  <option value="desc">▼</option>
+                  <option value="asc">▲</option>
+                </select>
+              </div>
+            </div>
+          </th>`;
+
+        headRow.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+          cb.addEventListener("change", () => {
+            const managerId = cb.getAttribute("data-manager");
+            if (!managerId) return;
+            if (cb.checked) selectedManagerIds.add(managerId);
+            else selectedManagerIds.delete(managerId);
+            loadData();
+          });
+        });
+
+        document.getElementById(sortById).addEventListener("change", loadData);
+        document.getElementById(sortDirId).addEventListener("change", loadData);
+      }
+
+      function renderTable(data) {
+        const managers = data.managers || [];
+        const weeks = (data.weeks || []).slice().reverse();
+        const totals = data.totals || {};
+        const revenues = data.revenues || {};
+
+        renderHeader(managers);
+
+        tableBody.innerHTML = "";
+        weeks.forEach((week) => {
+          let row = `<tr><td class="sticky">${week.label}</td>`;
+          managers.forEach((m) => {
+            const stat = week.stats[m];
+            const rev = week.revenues[m] || 0;
+            if (stat) {
+              const ratio = stat.ratio * 100;
+              let cls = "";
+              if (ratio > 30) cls = "cell-high";
+              else if (ratio < 20) cls = "cell-low";
+              row += `
+                <td class="${cls}">
+                  <div class="cell-stack">
+                    <div class="ratio">${ratio.toFixed(1)}%</div>
+                    <div class="muted">${stat.success}/${stat.total}</div>
+                    <div class="muted">${Math.round(rev)} руб.</div>
+                  </div>
+                </td>`;
+            } else {
+              row += `<td class="muted">—</td>`;
+            }
+          });
+          row += `
+            <td>
+              <div class="cell-stack">
+                <div class="ratio">${(week.summary.ratio * 100).toFixed(1)}%</div>
+                <div class="muted">${week.summary.success}/${week.summary.total}</div>
+                <div class="muted">${Math.round(week.summary.revenue)} руб.</div>
+              </div>
+            </td>
+          </tr>`;
+          tableBody.insertAdjacentHTML("beforeend", row);
+        });
+
+        let totalRow = `<tr class="total-row"><td class="sticky">Итого</td>`;
+        managers.forEach((m) => {
+          const stat = totals[m];
+          if (stat) {
+            totalRow += `
+              <td>
+                <div class="cell-stack">
+                  <div class="ratio">${(stat.ratio * 100).toFixed(1)}%</div>
+                  <div class="muted">${stat.success}/${stat.total}</div>
+                  <div class="muted">${Math.round(revenues[m] || 0)} руб.</div>
+                </div>
+              </td>`;
+          } else {
+            totalRow += `<td class="muted">—</td>`;
+          }
+        });
+        totalRow += `<td class="muted">—</td></tr>`;
+        tableBody.insertAdjacentHTML("beforeend", totalRow);
+      }
+
+      function renderChart(data) {
+        const managers = data.managers || [];
+        const weeks = data.weeks || [];
+        const labels = weeks.map((w) => w.label);
+
+        const palette = [
+          "#0b5fff",
+          "#f26b38",
+          "#2f9e44",
+          "#7048e8",
+          "#f59f00",
+          "#12b886",
+          "#e03131",
+          "#1971c2",
+          "#0ca678",
+          "#c2255c",
+        ];
+
+        const datasets = managers.map((m, idx) => ({
+          label: m,
+          data: weeks.map((w) => (w.stats[m] ? w.stats[m].ratio * 100 : 0)),
+          borderColor: palette[idx % palette.length],
+          backgroundColor: "transparent",
+          tension: 0.2,
+        }));
+
+        if (chartInstance) {
+          chartInstance.destroy();
+        }
+
+        chartInstance = new Chart(chartCanvas, {
+          type: "line",
+          data: { labels, datasets },
+          options: {
+            responsive: true,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+              legend: { position: "top" },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`,
+                },
+              },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: { callback: (v) => `${v}%` },
+              },
+            },
+          },
+        });
+      }
+
+      async function loadData() {
+        const query = buildQuery();
+        const response = await fetch(`/dashboard/conversion/data?${query}`);
+        const data = await response.json();
+        renderTable(data);
+        renderChart(data);
+      }
+
+      loadData();
+    </script>
+  </body>
+</html>
