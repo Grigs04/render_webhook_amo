@@ -3,3 +3,4 @@ venv
 __pycache__/
 test.py
 *.pyc
+google_service_account.json

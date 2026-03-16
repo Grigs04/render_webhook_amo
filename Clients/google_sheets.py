@@ -10,7 +10,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 SERVICE_ACCOUNT_PATH = os.getenv(
     "SHEETS_SERVICE_ACCOUNT",
-    os.path.join(os.getcwd(), "google_service_account.json"),
+    "/etc/secrets/google_service_account.json",
 )
 SPREADSHEET_ID = os.getenv("SHEETS_SPREADSHEET_ID")
 
