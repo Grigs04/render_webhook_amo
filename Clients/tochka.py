@@ -1,4 +1,5 @@
 import httpx
+import logging
 from load_dotenv import load_dotenv
 import os
 from pydantic import BaseModel
@@ -14,6 +15,7 @@ TAX_CODE = os.getenv('TAX_CODE')
 TOCHKA_BASE_URL = os.getenv('TOCHKA_BASE_URL')
 
 client = httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=5.0))
+logger = logging.getLogger("tochka")
 
 class CompanyData(BaseModel):
     secondSideName: str
@@ -29,11 +31,13 @@ async def create_invoice(company, price: float, order_id: str):
         from Clients.amocrm import AmoDataError
         raise AmoDataError(message='Missing company name or VAT ID', code='INCOMPLETE_COMPANY_DATA')
 
-    company_data = CompanyData(secondSideName=company.get('name'),
+    name = company.get('name', '')
+    type_value = 'ip' if name.upper().startswith('ИП') else 'company'
+    company_data = CompanyData(secondSideName=name,
                                taxCode=company.get('vat_id'),
                                legalAddress=company.get('address'),
                                kpp=company.get('kpp'),
-                               type='ip' if company.get('name', '').startswith('ИП') else 'company')
+                               type=type_value)
 
 
     payload = {
@@ -56,7 +60,7 @@ async def create_invoice(company, price: float, order_id: str):
                     ],
                     "totalAmount": price,
                     "totalNds": "0",
-                    "number": order_id,
+                    "number": str(order_id),
                     "paymentExpiryDate": payment_date}
             }
         }
@@ -66,6 +70,8 @@ async def create_invoice(company, price: float, order_id: str):
                                  json=payload,
                                  headers={'Authorization': f'Bearer {TOCHKA_TOKEN}',
                                           'Accept': 'application/json'})
+    if response.status_code >= 400:
+        logger.error("tochka create invoice failed status=%s body=%s", response.status_code, response.text)
     response.raise_for_status()
     invoice_id = response.json().get('Data', {}).get('documentId')
 
@@ -91,18 +97,72 @@ async def check_status(uuid):
     result = response.get('Data', {}).get('paymentStatus')
     return result
 
-async def create_act(parent_uuid: str | None = None):
-    response = await client.post(url=f'{TOCHKA_BASE_URL}/closing-documents',
-                           headers={'Authorization': f'Bearer {TOCHKA_TOKEN}',
-                                    'Accept': 'application/pdf'},
-                           json={
+async def create_act(company, price: float, order_id: str, invoice_uuid: str):
+    if not all(company.get(field) for field in ['name', 'vat_id']):
+        from Clients.amocrm import AmoDataError
+        raise AmoDataError(message='Missing company name or VAT ID', code='INCOMPLETE_COMPANY_DATA')
+
+    name = company.get('name', '')
+    type_value = 'ip' if name.upper().startswith('ИП') else 'company'
+    company_data = CompanyData(secondSideName=name,
+                               taxCode=company.get('vat_id'),
+                               legalAddress=company.get('address'),
+                               kpp=company.get('kpp'),
+                               type=type_value)
+
+    total_amount = f"{price:.2f}"
+    payload = {
         "Data": {
             "accountId": ACCOUNT_NUM,
             "customerCode": CUSTOMER_CODE,
-            'documentId': '7ab2d914-296b-462a-9b9b-ef07ca143108',
-            "Content": "Act"
+            "SecondSide": {
+                "accountId": ACCOUNT_NUM,
+                "legalAddress": company_data.legalAddress,
+                "kpp": company_data.kpp,
+                "taxCode": company_data.taxCode,
+                "type": company_data.type,
+                "secondSideName": company_data.secondSideName,
+            },
+            "documentId": invoice_uuid,
+            "Content": {
+                "Act": {
+                    "Positions": [
+                        {
+                            "positionName": "Проведение мероприятия",
+                            "unitCode": "услуга.",
+                            "ndsKind": "without_nds",
+                            "price": total_amount,
+                            "quantity": "1",
+                            "totalAmount": total_amount,
+                            "totalNds": "0",
+                        }
+                    ],
+                    "totalAmount": total_amount,
+                    "totalNds": "0",
+                    "number": str(order_id),
+                }
+            }
         }
-                           }
-                           )
+    }
 
-    print(json.dumps(response.json(), indent=2, ensure_ascii=False))
+    response = await client.post(url=f'{TOCHKA_BASE_URL}/closing-documents',
+                           headers={'Authorization': f'Bearer {TOCHKA_TOKEN}',
+                                    'Accept': 'application/json',
+                                    'Content-Type': 'application/json'},
+                           json=payload
+                           )
+    if response.status_code >= 400:
+        logger.error("tochka create act failed status=%s body=%s", response.status_code, response.text)
+    response.raise_for_status()
+    document_id = response.json().get('Data', {}).get('documentId')
+    return document_id
+
+
+async def get_act(document_id: str):
+    response = await client.get(
+        url=f'{TOCHKA_BASE_URL}/closing-documents/{CUSTOMER_CODE}/{document_id}/file',
+        headers={'Authorization': f'Bearer {TOCHKA_TOKEN}',
+                 'Accept': 'application/pdf'})
+
+    response.raise_for_status()
+    return await response.aread()
