@@ -18,6 +18,7 @@ pydantic==2.12.5
 pydantic-settings==2.13.1
 Pygments==2.19.2
 python-dotenv==1.2.1
+python-multipart==0.0.9
 PyYAML==6.0.3
 rich==14.3.3
 rignore==0.7.6
