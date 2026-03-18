@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Конверсия менеджеров за 6 месяцев</title>
+    <title>Финансовая статистика</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -18,6 +18,8 @@
         --accent: #0b5fff;
         --muted: #6a6a6a;
         --border: #e5e2dc;
+        --good: #1a7f37;
+        --bad: #c92a2a;
       }
       body {
         margin: 0;
@@ -41,16 +43,21 @@
         padding: 18px 32px 40px;
         overflow-x: auto;
       }
-      .chart-card {
-        background: var(--card);
+      .controls {
+        padding: 0 32px 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .controls select {
+        padding: 6px 8px;
         border: 1px solid var(--border);
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
-        padding: 16px;
-        margin-bottom: 16px;
+        border-radius: 6px;
+        font-size: 13px;
       }
       table {
         border-collapse: collapse;
-        min-width: 1000px;
+        min-width: 900px;
         background: var(--card);
         border: 1px solid var(--border);
         box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
@@ -81,277 +88,205 @@
       }
       .ratio {
         font-weight: 700;
+      }
+      .ratio.good {
+        color: var(--good);
+      }
+      .ratio.bad {
+        color: var(--bad);
+      }
+      .ratio.neutral {
         color: var(--accent);
       }
-      .muted {
-        color: var(--muted);
-        font-size: 12px;
-      }
-      .total-row td {
-        background: #fff7e6;
-        font-weight: 600;
-      }
-      .cell-stack {
+      .filter-wrap {
         display: flex;
         flex-direction: column;
-        gap: 2px;
-      }
-      .header-cell {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-      .header-tools {
-        display: flex;
         gap: 6px;
         align-items: center;
-        justify-content: center;
       }
-      .header-tools select {
+      .filter-wrap select {
+        width: 100%;
         padding: 4px 6px;
         border: 1px solid var(--border);
         border-radius: 6px;
         font-size: 12px;
       }
-      .header-tools input[type="checkbox"] {
-        transform: scale(1.05);
-      }
-      td.cell-high {
-        background: #e7f6ed !important;
-      }
-      td.cell-low {
-        background: #fde8e7 !important;
+      .load-more {
+        margin: 12px 32px 0;
+        padding: 8px 14px;
+        border: 1px solid var(--border);
+        background: #fff;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
       }
     </style>
   </head>
   <body>
     <header>
-      <h1>Конверсия менеджеров за последние 6 месяцев</h1>
-      <div class="subtitle">Разбивка по неделям (26 недель)</div>
+      <h1>Финансовая статистика</h1>
+      <div class="subtitle">Выручка, конверсия, расходы, прибыль. Данные с 15.09.2025</div>
     </header>
+    <div class="controls">
+      <label for="granularity">Разбивка:</label>
+      <select id="granularity">
+        <option value="week" selected>По неделям</option>
+        <option value="month">По месяцам</option>
+        <option value="quarter">По кварталам</option>
+        <option value="day">По дням</option>
+      </select>
+    </div>
     <div class="wrap">
-      <div class="chart-card">
-        <canvas id="conversionChart" width="1400" height="360"></canvas>
-      </div>
       <table id="dataTable">
         <thead>
           <tr>
-            <th class="sticky">Неделя</th>
-            <th>Итого</th>
-          </tr>
-        </thead>
-        <tbody>
-        </tbody>
-      </table>
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-    <script>
-      const userList = {{ user_list | tojson }};
-      const sortOptions = [
-        { value: "total", label: "Всего" },
-        { value: "success", label: "Успешные" },
-        { value: "unsuccessful", label: "Неуспешные" },
-        { value: "ratio", label: "Конверсия" },
-        { value: "revenue", label: "Выручка" },
-      ];
-
-      const sortById = "sort_by";
-      const sortDirId = "sort_dir";
-      const tableBody = document.querySelector("#dataTable tbody");
-      const chartCanvas = document.getElementById("conversionChart");
-
-      let chartInstance = null;
-      let selectedManagerIds = new Set(userList.map((u) => String(u.id)));
-
-      function getSelectedManagers() {
-        return Array.from(selectedManagerIds);
-      }
-
-      function buildQuery() {
-        const params = new URLSearchParams();
-        const managerIds = getSelectedManagers();
-        if (managerIds.length) params.set("managers", managerIds.join(","));
-        params.set("sort_by", document.getElementById(sortById).value);
-        params.set("sort_dir", document.getElementById(sortDirId).value);
-        return params.toString();
-      }
-
-      function renderHeader(managers) {
-        const headRow = document.querySelector("#dataTable thead tr");
-        headRow.innerHTML = "<th class=\"sticky\">Неделя</th>";
-
-        const nameToId = new Map(userList.map((u) => [u.name, String(u.id)]));
-
-        managers.forEach((m) => {
-          const managerId = nameToId.get(m) || "";
-          const checked = managerId && selectedManagerIds.has(managerId) ? "checked" : "";
-          headRow.innerHTML += `
-            <th>
-              <div class="header-cell">
-                <div>${m}</div>
-                <div class="header-tools">
-                  <input type="checkbox" data-manager="${managerId}" ${checked} />
-                </div>
-              </div>
-            </th>`;
-        });
-
-        headRow.innerHTML += `
-          <th>
-            <div class="header-cell">
-              <div>Итого</div>
-              <div class="header-tools">
-                <select id="${sortById}">
-                  ${sortOptions.map((o) => `<option value="${o.value}">${o.label}</option>`).join("")}
+            <th class="sticky">
+              <div class="filter-wrap">
+                <div>Период</div>
+                <select id="sort-period">
+                  <option value="asc">▲</option>
+                  <option value="desc">▼</option>
                 </select>
-                <select id="${sortDirId}">
+              </div>
+            </th>
+            <th>
+              <div class="filter-wrap">
+                <div>Выручка</div>
+                <select id="sort-revenue">
                   <option value="desc">▼</option>
                   <option value="asc">▲</option>
                 </select>
               </div>
-            </div>
-          </th>`;
-
-        headRow.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-          cb.addEventListener("change", () => {
-            const managerId = cb.getAttribute("data-manager");
-            if (!managerId) return;
-            if (cb.checked) selectedManagerIds.add(managerId);
-            else selectedManagerIds.delete(managerId);
-            loadData();
-          });
-        });
-
-        document.getElementById(sortById).addEventListener("change", loadData);
-        document.getElementById(sortDirId).addEventListener("change", loadData);
-      }
-
-      function renderTable(data) {
-        const managers = data.managers || [];
-        const weeks = (data.weeks || []).slice().reverse();
-        const totals = data.totals || {};
-        const revenues = data.revenues || {};
-
-        renderHeader(managers);
-
-        tableBody.innerHTML = "";
-        weeks.forEach((week) => {
-          let row = `<tr><td class="sticky">${week.label}</td>`;
-          managers.forEach((m) => {
-            const stat = week.stats[m];
-            const rev = week.revenues[m] || 0;
-            if (stat) {
-              const ratio = stat.ratio * 100;
-              let cls = "";
-              if (ratio > 30) cls = "cell-high";
-              else if (ratio < 20) cls = "cell-low";
-              row += `
-                <td class="${cls}">
-                  <div class="cell-stack">
-                    <div class="ratio">${ratio.toFixed(1)}%</div>
-                    <div class="muted">${stat.success}/${stat.total}</div>
-                    <div class="muted">${Math.round(rev)} руб.</div>
-                  </div>
-                </td>`;
-            } else {
-              row += `<td class="muted">—</td>`;
-            }
-          });
-          row += `
-            <td>
-              <div class="cell-stack">
-                <div class="ratio">${(week.summary.ratio * 100).toFixed(1)}%</div>
-                <div class="muted">${week.summary.success}/${week.summary.total}</div>
-                <div class="muted">${Math.round(week.summary.revenue)} руб.</div>
+            </th>
+            <th>
+              <div class="filter-wrap">
+                <div>Конверсия</div>
+                <select id="sort-ratio">
+                  <option value="desc">▼</option>
+                  <option value="asc">▲</option>
+                </select>
               </div>
-            </td>
-          </tr>`;
-          tableBody.insertAdjacentHTML("beforeend", row);
-        });
+            </th>
+            <th>
+              <div class="filter-wrap">
+                <div>Расходы</div>
+                <select id="sort-expenses">
+                  <option value="desc">▼</option>
+                  <option value="asc">▲</option>
+                </select>
+              </div>
+            </th>
+            <th>
+              <div class="filter-wrap">
+                <div>Прибыль</div>
+                <select id="sort-profit">
+                  <option value="desc">▼</option>
+                  <option value="asc">▲</option>
+                </select>
+              </div>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="sticky">{{ row.period }}</td>
+            <td>{{ row.revenue | round(0) }} ₽</td>
+            <td class="ratio">{{ (row.ratio * 100) | round(1) }}%</td>
+            <td>{{ row.expenses | round(0) }} ₽</td>
+            <td>{{ row.profit | round(0) }} ₽</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <button id="loadMore" class="load-more" style="display: none;">Загрузить еще</button>
+    <script>
+      const tableBody = document.querySelector("#dataTable tbody");
+      const granularity = document.getElementById("granularity");
+      const loadMoreBtn = document.getElementById("loadMore");
+      const sorters = {
+        period: document.getElementById("sort-period"),
+        revenue: document.getElementById("sort-revenue"),
+        ratio: document.getElementById("sort-ratio"),
+        expenses: document.getElementById("sort-expenses"),
+        profit: document.getElementById("sort-profit"),
+      };
+      let activeSort = "period";
+      let cachedRows = [];
+      let dayOffset = 0;
+      const dayLimit = 30;
 
-        let totalRow = `<tr class="total-row"><td class="sticky">Итого</td>`;
-        managers.forEach((m) => {
-          const stat = totals[m];
-          if (stat) {
-            totalRow += `
-              <td>
-                <div class="cell-stack">
-                  <div class="ratio">${(stat.ratio * 100).toFixed(1)}%</div>
-                  <div class="muted">${stat.success}/${stat.total}</div>
-                  <div class="muted">${Math.round(revenues[m] || 0)} руб.</div>
-                </div>
-              </td>`;
-          } else {
-            totalRow += `<td class="muted">—</td>`;
+      function ratioClass(ratio) {
+        if (ratio > 30) return "ratio good";
+        if (ratio < 20) return "ratio bad";
+        return "ratio neutral";
+      }
+
+      function sortRows(rows) {
+        const dir = sorters[activeSort].value === "asc" ? 1 : -1;
+        return rows.slice().sort((a, b) => {
+          if (activeSort === "period") {
+            return a.period_start.localeCompare(b.period_start) * dir;
           }
+          return (a[activeSort] - b[activeSort]) * dir;
         });
-        totalRow += `<td class="muted">—</td></tr>`;
-        tableBody.insertAdjacentHTML("beforeend", totalRow);
       }
 
-      function renderChart(data) {
-        const managers = data.managers || [];
-        const weeks = data.weeks || [];
-        const labels = weeks.map((w) => w.label);
+      function renderRows() {
+        tableBody.innerHTML = "";
+        const rows = sortRows(cachedRows);
+        rows.forEach((row) => {
+          const ratioValue = row.ratio * 100;
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td class="sticky">${row.period}</td>
+            <td>${Math.round(row.revenue).toLocaleString("ru-RU")} ₽</td>
+            <td class="${ratioClass(ratioValue)}">${ratioValue.toFixed(1)}%</td>
+            <td>${Math.round(row.expenses).toLocaleString("ru-RU")} ₽</td>
+            <td>${Math.round(row.profit).toLocaleString("ru-RU")} ₽</td>
+          `;
+          tableBody.appendChild(tr);
+        });
+      }
 
-        const palette = [
-          "#0b5fff",
-          "#f26b38",
-          "#2f9e44",
-          "#7048e8",
-          "#f59f00",
-          "#12b886",
-          "#e03131",
-          "#1971c2",
-          "#0ca678",
-          "#c2255c",
-        ];
-
-        const datasets = managers.map((m, idx) => ({
-          label: m,
-          data: weeks.map((w) => (w.stats[m] ? w.stats[m].ratio * 100 : 0)),
-          borderColor: palette[idx % palette.length],
-          backgroundColor: "transparent",
-          tension: 0.2,
-        }));
-
-        if (chartInstance) {
-          chartInstance.destroy();
+      async function loadData(reset = true) {
+        if (reset) {
+          cachedRows = [];
+          dayOffset = 0;
         }
-
-        chartInstance = new Chart(chartCanvas, {
-          type: "line",
-          data: { labels, datasets },
-          options: {
-            responsive: true,
-            interaction: { mode: "index", intersect: false },
-            plugins: {
-              legend: { position: "top" },
-              tooltip: {
-                callbacks: {
-                  label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`,
-                },
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: { callback: (v) => `${v}%` },
-              },
-            },
-          },
-        });
-      }
-
-      async function loadData() {
-        const query = buildQuery();
-        const response = await fetch(`/dashboard/conversion/data?${query}`);
+        const params = new URLSearchParams();
+        params.set("granularity", granularity.value);
+        if (granularity.value === "day") {
+          params.set("offset", String(dayOffset));
+          params.set("limit", String(dayLimit));
+        }
+        const response = await fetch(`/dashboard/finance/data?${params.toString()}`);
         const data = await response.json();
-        renderTable(data);
-        renderChart(data);
+        cachedRows = cachedRows.concat(data.rows || []);
+        renderRows();
+
+        if (granularity.value === "day" && data.has_more) {
+          loadMoreBtn.style.display = "inline-block";
+        } else {
+          loadMoreBtn.style.display = "none";
+        }
       }
 
-      loadData();
+      Object.keys(sorters).forEach((key) => {
+        sorters[key].addEventListener("change", () => {
+          activeSort = key;
+          renderRows();
+        });
+      });
+
+      granularity.addEventListener("change", () => loadData(true));
+      loadMoreBtn.addEventListener("click", () => {
+        dayOffset += dayLimit;
+        loadData(false);
+      });
+
+      loadData(true);
     </script>
   </body>
 </html>

@@ -1,6 +1,10 @@
-﻿import httpx
-import anyio
+﻿import asyncio
+import json
 import os
+
+import httpx
+import anyio
+import logging
 from dotenv import load_dotenv
 from Clients.tochka import check_status
 
@@ -10,6 +14,7 @@ AMO_TOKEN = os.getenv('AMO_TOKEN')
 
 client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0))
 HEADERS = {"Authorization": f"Bearer {AMO_TOKEN}", "Content-Type": "application/json"}
+logger = logging.getLogger("amocrm")
 
 class AmoDataError(Exception):
     def __init__(self, message: str, code: str | None = None):
@@ -19,15 +24,28 @@ class AmoDataError(Exception):
 
 
 async def notify_manager(order_id: int, text: str):
-    response = await client.post(url=f'{AMO_BASE_URL}/leads/{order_id}/notes',
-                                 headers=HEADERS,
-                                 json=[{
-                                     "note_type": "common",
-                                     "params":
-                                         {'text': text}
-                                 }]
-                                 )
-    response.raise_for_status()
+    try:
+        response = await client.post(
+            url=f'{AMO_BASE_URL}/leads/{order_id}/notes',
+            headers=HEADERS,
+            json=[
+                {
+                    "note_type": "common",
+                    "params": {"text": text},
+                }
+            ],
+        )
+        if response.status_code >= 400:
+            logger.error(
+                "amocrm notify_manager failed status=%s body=%s",
+                response.status_code,
+                response.text,
+            )
+        response.raise_for_status()
+    except httpx.HTTPError:
+        logger.exception("amocrm notify_manager exception order_id=%s", order_id)
+        return False
+    return True
 
 
 
@@ -218,6 +236,170 @@ async def get_user_name(user_id: int) -> str:
     return data.get("name") or data.get("email") or str(user_id)
 
 
+def _account_base_url() -> str:
+    if not AMO_BASE_URL:
+        return ""
+    base = AMO_BASE_URL.rstrip("/")
+    if base.endswith("/api/v4"):
+        base = base[:-7]
+    return base
+
+
+async def get_last_incoming_message_events(limit: int = 10) -> list[dict]:
+    if not AMO_BASE_URL or not AMO_TOKEN:
+        raise RuntimeError("AMO_BASE_URL/AMO_TOKEN are required")
+
+    base_url = _account_base_url()
+    results: list[dict] = []
+    page = 1
+    while len(results) < limit:
+        response = await _get_with_retry(
+            url=f"{AMO_BASE_URL}/events",
+            params={
+                "limit": 100,
+                "page": page,
+                "filter[type][]": "incoming_chat_message",
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
+        events = payload.get("_embedded", {}).get("events", [])
+        for event in events:
+            if event.get("entity_type") != "lead":
+                continue
+            lead_id = event.get("entity_id")
+            created_at = event.get("created_at")
+            if not lead_id or not created_at:
+                continue
+            lead_url = f"{base_url}/leads/detail/{lead_id}" if base_url else str(lead_id)
+            results.append(
+                {
+                    "created_at": int(created_at),
+                    "lead_id": int(lead_id),
+                    "lead_url": lead_url,
+                }
+            )
+            if len(results) >= limit:
+                break
+        if not payload.get("_links", {}).get("next"):
+            break
+        page += 1
+    return results
+
+
+async def get_chat_response_times(
+    start_ts: int | None = None,
+    end_ts: int | None = None,
+    limit_events: int = 2000,
+) -> dict:
+    if not AMO_BASE_URL or not AMO_TOKEN:
+        raise RuntimeError("AMO_BASE_URL/AMO_TOKEN are required")
+
+    base_url = _account_base_url()
+    events: list[dict] = []
+    page = 1
+    fetched = 0
+    while fetched < limit_events:
+        params: list[tuple[str, int | str]] = [
+            ("limit", 100),
+            ("page", page),
+            ("filter[type][]", "incoming_chat_message"),
+            ("filter[type][]", "outgoing_chat_message"),
+        ]
+        if start_ts is not None:
+            params.append(("filter[created_at][from]", int(start_ts)))
+        if end_ts is not None:
+            params.append(("filter[created_at][to]", int(end_ts)))
+
+        response = await _get_with_retry(url=f"{AMO_BASE_URL}/events", params=params)
+        response.raise_for_status()
+        payload = response.json()
+        batch = payload.get("_embedded", {}).get("events", [])
+        if not batch:
+            break
+        for event in batch:
+            events.append(event)
+            fetched += 1
+            if fetched >= limit_events:
+                break
+        if not payload.get("_links", {}).get("next") or fetched >= limit_events:
+            break
+        page += 1
+
+    events.sort(key=lambda e: int(e.get("created_at") or 0))
+
+    pending: dict[int, list[dict]] = {}
+    rows: list[dict] = []
+    manager_stats: dict[int, dict] = {}
+
+    for event in events:
+        if event.get("entity_type") != "lead":
+            continue
+        lead_id = event.get("entity_id")
+        created_at = event.get("created_at")
+        event_type = event.get("type")
+        if not lead_id or not created_at or not event_type:
+            continue
+
+        lead_id = int(lead_id)
+        created_at = int(created_at)
+
+        if event_type == "incoming_chat_message":
+            pending.setdefault(lead_id, []).append(event)
+            continue
+
+        if event_type != "outgoing_chat_message":
+            continue
+
+        queue = pending.get(lead_id)
+        if not queue:
+            continue
+
+        incoming = queue.pop(0)
+        incoming_at = int(incoming.get("created_at") or 0)
+        if incoming_at == 0:
+            continue
+
+        response_seconds = max(0, created_at - incoming_at)
+        manager_id = event.get("created_by")
+        if manager_id is None:
+            manager_id = 0
+        else:
+            manager_id = int(manager_id)
+
+        lead_url = f"{base_url}/leads/detail/{lead_id}" if base_url else str(lead_id)
+        rows.append(
+            {
+                "lead_id": lead_id,
+                "lead_url": lead_url,
+                "incoming_at": incoming_at,
+                "outgoing_at": created_at,
+                "response_seconds": response_seconds,
+                "manager_id": manager_id,
+            }
+        )
+
+        stats = manager_stats.setdefault(manager_id, {"count": 0, "total_seconds": 0})
+        stats["count"] += 1
+        stats["total_seconds"] += response_seconds
+
+    for manager_id, stats in manager_stats.items():
+        count = stats["count"]
+        stats["avg_seconds"] = (stats["total_seconds"] / count) if count else 0
+
+    overall_count = sum(s["count"] for s in manager_stats.values())
+    overall_seconds = sum(s["total_seconds"] for s in manager_stats.values())
+    overall_avg = (overall_seconds / overall_count) if overall_count else 0
+
+    return {
+        "rows": rows,
+        "managers": manager_stats,
+        "overall_avg_seconds": overall_avg,
+        "events_fetched": len(events),
+    }
+
+
+
 async def _get_with_retry(url: str, params: dict | None = None, retries: int = 3) -> httpx.Response:
     last_error = None
     for attempt in range(retries):
@@ -236,6 +418,6 @@ async def _get_with_retry(url: str, params: dict | None = None, retries: int = 3
             raise
     raise last_error
 
-
-
-
+if __name__ == "__main__":
+    result = asyncio.run(get_last_incoming_message_events())
+    print(json.dumps(result, indent=2, ensure_ascii=False))

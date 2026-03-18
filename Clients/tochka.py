@@ -14,7 +14,7 @@ CUSTOMER_CODE = os.getenv('CUSTOMER_CODE')
 TAX_CODE = os.getenv('TAX_CODE')
 TOCHKA_BASE_URL = os.getenv('TOCHKA_BASE_URL')
 
-client = httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=5.0))
+client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0))
 logger = logging.getLogger("tochka")
 
 class CompanyData(BaseModel):
@@ -32,7 +32,7 @@ async def create_invoice(company, price: float, order_id: str):
         raise AmoDataError(message='Missing company name or VAT ID', code='INCOMPLETE_COMPANY_DATA')
 
     name = company.get('name', '')
-    type_value = 'ip' if name.upper().startswith('РРџ') else 'company'
+    type_value = 'ip' if name.upper().startswith('ИП') else 'company'
     company_data = CompanyData(secondSideName=name,
                                taxCode=company.get('vat_id'),
                                legalAddress=company.get('address'),
@@ -49,8 +49,8 @@ async def create_invoice(company, price: float, order_id: str):
                 "Invoice": {
                     "Positions": [
                         {
-                            "positionName": "РџСЂРѕРІРµРґРµРЅРёРµ РјРµСЂРѕРїСЂРёСЏС‚РёСЏ",
-                            "unitCode": "СѓСЃР»СѓРіР°.",
+                            "positionName": "Проведение мероприятия",
+                            "unitCode": "услуга.",
                             "ndsKind": "without_nds",
                             "price": price,
                             "quantity": "1",
@@ -103,7 +103,7 @@ async def create_act(company, price: float, order_id: str, invoice_uuid: str):
         raise AmoDataError(message='Missing company name or VAT ID', code='INCOMPLETE_COMPANY_DATA')
 
     name = company.get('name', '')
-    type_value = 'ip' if name.upper().startswith('РРџ') else 'company'
+    type_value = 'ip' if name.upper().startswith('ИП') else 'company'
     company_data = CompanyData(secondSideName=name,
                                taxCode=company.get('vat_id'),
                                legalAddress=company.get('address'),
@@ -128,8 +128,8 @@ async def create_act(company, price: float, order_id: str, invoice_uuid: str):
                 "Act": {
                     "Positions": [
                         {
-                            "positionName": "РџСЂРѕРІРµРґРµРЅРёРµ РјРµСЂРѕРїСЂРёСЏС‚РёСЏ",
-                            "unitCode": "СѓСЃР»СѓРіР°.",
+                            "positionName": "Проведение мероприятия",
+                            "unitCode": "услуга.",
                             "ndsKind": "without_nds",
                             "price": total_amount,
                             "quantity": "1",
