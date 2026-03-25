@@ -57,7 +57,7 @@ def _get_sheet_id(service, sheet_name: str) -> int:
 
 
 HEADERS = [
-    "ID сделки",
+    "id",
     "Дата",
     "Цена",
     "Трансфер",
@@ -65,11 +65,13 @@ HEADERS = [
     "Тариф",
     "Время начала",
     "Часы",
+    "Кол-во человек",
     "Примечание",
     "Контакт",
-    "Менеджер",
     "Ведущий",
     "Способ оплаты",
+    "Реквизит",
+    "Информация",
     "Ставка ведущего",
     "Прибыль",
 ]
@@ -99,7 +101,7 @@ def upsert_deals(
     values_resp = (
         service.spreadsheets()
         .values()
-        .get(spreadsheetId=SPREADSHEET_ID, range=f"'{sheet_name}'!A:O")
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"'{sheet_name}'!A:Q")
         .execute()
     )
     values = values_resp.get("values", [])
@@ -107,7 +109,7 @@ def upsert_deals(
     if not values or not values[0] or values[0][0] != HEADERS[0]:
         service.spreadsheets().values().update(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"'{sheet_name}'!A1:O1",
+            range=f"'{sheet_name}'!A1:Q1",
             valueInputOption="RAW",
             body={"values": [HEADERS]},
         ).execute()
@@ -130,7 +132,7 @@ def upsert_deals(
         if row_index:
             update_data.append(
                 {
-                    "range": f"'{sheet_name}'!A{row_index}:O{row_index}",
+                    "range": f"'{sheet_name}'!A{row_index}:Q{row_index}",
                     "values": [row_values],
                 }
             )
@@ -147,7 +149,7 @@ def upsert_deals(
         body = {"values": append_values}
         service.spreadsheets().values().append(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"'{sheet_name}'!A:O",
+            range=f"'{sheet_name}'!A:Q",
             valueInputOption="USER_ENTERED",
             insertDataOption="INSERT_ROWS",
             body=body,
@@ -179,7 +181,7 @@ def upsert_deals(
     updated = (
         service.spreadsheets()
         .values()
-        .get(spreadsheetId=SPREADSHEET_ID, range=f"'{sheet_name}'!A:O")
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"'{sheet_name}'!A:Q")
         .execute()
     )
     last_row = len(updated.get("values", []))
@@ -194,7 +196,7 @@ def upsert_deals(
                     "startRowIndex": 0,
                     "endRowIndex": 1,
                     "startColumnIndex": 0,
-                    "endColumnIndex": 15,
+                    "endColumnIndex": 17,
                 },
                 "cell": {
                     "userEnteredFormat": {
@@ -211,7 +213,7 @@ def upsert_deals(
                     "sheetId": sheet_id,
                     "startRowIndex": 1,
                     "startColumnIndex": 0,
-                    "endColumnIndex": 15,
+                    "endColumnIndex": 17,
                 },
                 "cell": {"userEnteredFormat": {"textFormat": {"bold": False}}},
                 "fields": "userEnteredFormat.textFormat.bold",
@@ -223,7 +225,7 @@ def upsert_deals(
                     "sheetId": sheet_id,
                     "startRowIndex": 0,
                     "startColumnIndex": 0,
-                    "endColumnIndex": 15,
+                    "endColumnIndex": 17,
                 },
                 "cell": {"userEnteredFormat": {"horizontalAlignment": "CENTER"}},
                 "fields": "userEnteredFormat.horizontalAlignment",
@@ -282,8 +284,8 @@ def upsert_deals(
                 "range": {
                     "sheetId": sheet_id,
                     "startRowIndex": 1,
-                    "startColumnIndex": 13,
-                    "endColumnIndex": 14,
+                    "startColumnIndex": 15,
+                    "endColumnIndex": 16,
                 },
                 "cell": {
                     "userEnteredFormat": {
@@ -298,8 +300,8 @@ def upsert_deals(
                 "range": {
                     "sheetId": sheet_id,
                     "startRowIndex": 1,
-                    "startColumnIndex": 14,
-                    "endColumnIndex": 15,
+                    "startColumnIndex": 16,
+                    "endColumnIndex": 17,
                 },
                 "cell": {
                     "userEnteredFormat": {
@@ -307,6 +309,21 @@ def upsert_deals(
                     }
                 },
                 "fields": "userEnteredFormat.numberFormat",
+            }
+        },
+        {
+            "setDataValidation": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": 1,
+                    "startColumnIndex": 13,
+                    "endColumnIndex": 15,
+                },
+                "rule": {
+                    "condition": {"type": "BOOLEAN"},
+                    "showCustomUi": True,
+                    "strict": True,
+                },
             }
         },
         {
@@ -341,7 +358,7 @@ def upsert_deals(
                 "startRowIndex": 1,
                 "endRowIndex": last_row,
                 "startColumnIndex": 0,
-                "endColumnIndex": 15,
+                "endColumnIndex": 17,
             },
             "sortSpecs": [{"dimensionIndex": 1, "sortOrder": "ASCENDING"}],
         }

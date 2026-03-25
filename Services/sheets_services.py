@@ -6,6 +6,9 @@ from Clients import amocrm
 from Clients import google_sheets
 
 STATUSES = [75366150, 78036790]
+EXCLUDED_STATUSES = [142]
+CHECKBOX_TRUE = "TRUE"
+CHECKBOX_FALSE = "FALSE"
 
 
 def _get_custom_field(custom_fields: list[dict[str, Any]], name: str) -> str:
@@ -20,6 +23,18 @@ def _get_custom_field(custom_fields: list[dict[str, Any]], name: str) -> str:
             return ""
         return str(value)
     return ""
+
+
+def _get_checkbox(custom_fields: list[dict[str, Any]], name: str) -> str:
+    for field in custom_fields:
+        if field.get("field_name") != name:
+            continue
+        values = field.get("values") or []
+        if not values:
+            return CHECKBOX_FALSE
+        value = values[0].get("value")
+        return CHECKBOX_TRUE if bool(value) else CHECKBOX_FALSE
+    return CHECKBOX_FALSE
 
 
 def _format_date(value: str) -> str:
@@ -56,7 +71,6 @@ def _get_contact_value(contact: dict) -> str:
 async def update_deals_sheet(apply_format: bool = False) -> dict[str, int]:
     deals_by_id: dict[str, dict] = {}
     contact_cache: dict[int, str] = {}
-    user_cache: dict[int, str] = {}
 
     for status_id in STATUSES:
         deals = await amocrm.get_deals_by_status(status_id)
@@ -65,6 +79,15 @@ async def update_deals_sheet(apply_format: bool = False) -> dict[str, int]:
             if deal_id is None:
                 continue
             deals_by_id[str(deal_id)] = deal
+
+    excluded_ids: set[str] = set()
+    for status_id in EXCLUDED_STATUSES:
+        deals = await amocrm.get_deals_by_status(status_id)
+        for deal in deals:
+            deal_id = deal.get("id")
+            if deal_id is None:
+                continue
+            excluded_ids.add(str(deal_id))
 
     rows: list[tuple[str, list[str]]] = []
     for deal in deals_by_id.values():
@@ -83,9 +106,12 @@ async def update_deals_sheet(apply_format: bool = False) -> dict[str, int]:
         tariff = _get_custom_field(custom_fields, "Тариф")
         start_time = _get_custom_field(custom_fields, "Время начала")
         hours = _get_custom_field(custom_fields, "Количество часов")
+        people_count = _get_custom_field(custom_fields, "Кол-во человек")
         note = _get_custom_field(custom_fields, "Примечание к заказу")
         host = _get_custom_field(custom_fields, "Ведущий")
         payment_method = _get_custom_field(custom_fields, "Способ оплаты")
+        host_has_requisite = _get_checkbox(custom_fields, "У ведущего есть реквизит")
+        info_sent = _get_checkbox(custom_fields, "Скинул контакт и всю инфу")
         host_rate = _get_custom_field(custom_fields, "Ставка ведущего")
 
         contact_value = ""
@@ -97,13 +123,6 @@ async def update_deals_sheet(apply_format: bool = False) -> dict[str, int]:
                     contact = await amocrm.get_contact(contact_id)
                     contact_cache[contact_id] = _get_contact_value(contact)
                 contact_value = contact_cache[contact_id]
-
-        manager_value = ""
-        manager_id = deal.get("responsible_user_id")
-        if manager_id:
-            if manager_id not in user_cache:
-                user_cache[manager_id] = await amocrm.get_user_name(manager_id)
-            manager_value = user_cache[manager_id]
 
         rows.append(
             (
@@ -117,18 +136,21 @@ async def update_deals_sheet(apply_format: bool = False) -> dict[str, int]:
                     tariff,
                     start_time,
                     hours,
+                    people_count,
                     note,
                     contact_value,
-                    manager_value,
                     host,
                     payment_method,
+                    host_has_requisite,
+                    info_sent,
                     host_rate,
-                    '=ЕСЛИ(ИНДЕКС(N:N;СТРОКА())="";"";ИНДЕКС(C:C;СТРОКА())-ИНДЕКС(N:N;СТРОКА()))',
+                    '=ЕСЛИ(ИНДЕКС(P:P;СТРОКА())="";"";ИНДЕКС(C:C;СТРОКА())-ИНДЕКС(P:P;СТРОКА()))',
                 ],
             )
         )
 
     current_ids = {deal_id for deal_id, _ in rows if deal_id}
+    current_ids.update(excluded_ids)
     return await anyio.to_thread.run_sync(
         google_sheets.upsert_deals, rows, apply_format, current_ids
     )

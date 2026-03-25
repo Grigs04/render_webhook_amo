@@ -4,6 +4,7 @@ from Services.invoise_services import runner, checkker
 from Services.act_services import runner as act_runner
 from Services.agreement_services import run as agreement_runner
 from Services.sheets_services import update_deals_sheet
+from Services.sync_services import sync_crm_to_db
 
 router = APIRouter()
 logger = logging.getLogger("webhooks")
@@ -95,4 +96,10 @@ async def create_agreement(request: Request):
 @router.post('/amo/table')
 async def update_table(format: int = 0):
     result = await update_deals_sheet(apply_format=bool(format))
+    return {"status": "ok", **result}
+
+
+@router.post("/amo/sync-db")
+async def sync_db(updated_from: int | None = None, full: bool = False):
+    result = await sync_crm_to_db(updated_from=updated_from, full=full)
     return {"status": "ok", **result}

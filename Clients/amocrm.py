@@ -80,7 +80,7 @@ async def get_entity_data(entity_id: int):
 async def get_lead(lead_id: int) -> dict:
     response = await _get_with_retry(
         url=f'{AMO_BASE_URL}/leads/{lead_id}',
-        params={"with": "contacts"},
+        params={"with": "contacts,source"},
     )
     response.raise_for_status()
     return response.json()
@@ -234,6 +234,91 @@ async def get_user_name(user_id: int) -> str:
     response.raise_for_status()
     data = response.json()
     return data.get("name") or data.get("email") or str(user_id)
+
+
+async def get_users() -> list[dict]:
+    response = await _get_with_retry(
+        url=f"{AMO_BASE_URL}/users",
+    )
+    response.raise_for_status()
+    data = response.json()
+    return data.get("_embedded", {}).get("users", [])
+
+
+async def get_pipelines() -> list[dict]:
+    response = await _get_with_retry(
+        url=f"{AMO_BASE_URL}/leads/pipelines",
+    )
+    response.raise_for_status()
+    data = response.json()
+    return data.get("_embedded", {}).get("pipelines", [])
+
+
+async def get_sources() -> list[dict]:
+    response = await _get_with_retry(
+        url=f"{AMO_BASE_URL}/sources",
+    )
+    response.raise_for_status()
+    data = response.json()
+    return data.get("_embedded", {}).get("sources", [])
+
+
+async def get_leads_updated(
+    updated_from: int | None = None,
+    updated_to: int | None = None,
+    limit: int = 250,
+) -> list[dict]:
+    leads: list[dict] = []
+    page = 1
+    while True:
+        params: dict[str, int | str] = {"limit": limit, "page": page, "with": "source"}
+        if updated_from is not None:
+            params["filter[updated_at][from]"] = int(updated_from)
+        if updated_to is not None:
+            params["filter[updated_at][to]"] = int(updated_to)
+        response = await _get_with_retry(
+            url=f"{AMO_BASE_URL}/leads",
+            params=params,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        batch = payload.get("_embedded", {}).get("leads", [])
+        leads.extend(batch)
+        if not payload.get("_links", {}).get("next"):
+            break
+        page += 1
+    return leads
+
+
+async def get_events(
+    event_types: list[str] | None = None,
+    created_from: int | None = None,
+    created_to: int | None = None,
+    limit: int = 250,
+) -> list[dict]:
+    events: list[dict] = []
+    page = 1
+    while True:
+        params: list[tuple[str, int | str]] = [("limit", limit), ("page", page)]
+        if event_types:
+            for event_type in event_types:
+                params.append(("filter[type][]", event_type))
+        if created_from is not None:
+            params.append(("filter[created_at][from]", int(created_from)))
+        if created_to is not None:
+            params.append(("filter[created_at][to]", int(created_to)))
+        response = await _get_with_retry(
+            url=f"{AMO_BASE_URL}/events",
+            params=params,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        batch = payload.get("_embedded", {}).get("events", [])
+        events.extend(batch)
+        if not payload.get("_links", {}).get("next"):
+            break
+        page += 1
+    return events
 
 
 def _account_base_url() -> str:
