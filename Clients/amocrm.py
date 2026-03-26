@@ -157,6 +157,29 @@ async def add_tochka_uuid(order_id, uuid):
 
     response.raise_for_status()
 
+async def update_lead_custom_field(lead_id: int, field_id: int, value):
+    response = await client.patch(
+        url=f"{AMO_BASE_URL}/leads/{lead_id}",
+        headers=HEADERS,
+        json={
+            "id": lead_id,
+            "custom_fields_values": [
+                {
+                    "field_id": field_id,
+                    "values": [{"value": value}],
+                }
+            ],
+        },
+    )
+    if response.status_code >= 400:
+        logger.error(
+            "amocrm update_lead_custom_field failed lead_id=%s status=%s body=%s",
+            lead_id,
+            response.status_code,
+            response.text,
+        )
+    response.raise_for_status()
+
 
 async def get_orders_uuid():
     leads = await get_deals_by_status(75366150)  # DOCUMENTS/PREPAYMENT

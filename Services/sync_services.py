@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import datetime, timezone, date
 from typing import Any
 
 from Clients import amocrm
@@ -21,11 +22,30 @@ FIELD_IDS = {
     "address": 814201,
     "persons_count": 814205,
     "payment_method": 814197,
+    "host_price": 826281,
 }
 
 
 def _now_ts() -> int:
     return int(time.time())
+
+
+def _to_datetime(value: Any) -> datetime | None:
+    ts = _to_int(value)
+    if ts is None:
+        return None
+    if ts > 10_000_000_000:
+        ts = int(ts / 1000)
+    return datetime.fromtimestamp(ts)
+
+
+def _to_date(value: Any) -> date | None:
+    ts = _to_int(value)
+    if ts is None:
+        return None
+    if ts > 10_000_000_000:
+        ts = int(ts / 1000)
+    return datetime.fromtimestamp(ts).date()
 
 
 def _first_value(field: dict) -> Any:
@@ -75,21 +95,58 @@ def _extract_multiselect(custom_fields: list[dict], field_id: int) -> str | None
     values = field.get("values") or []
     if not values:
         return None
-    first = values[0].get("value")
-    return str(first) if first is not None else None
+    parts = []
+    for item in values:
+        value = item.get("value")
+        if value is None:
+            continue
+        parts.append(str(value))
+    if not parts:
+        return None
+    return "+".join(parts)
+
+
+def _extract_source_name(lead: dict) -> str | None:
+    embedded = lead.get("_embedded") or {}
+    source = embedded.get("source")
+    if isinstance(source, list):
+        source = source[0] if source else None
+    if isinstance(source, dict):
+        name = source.get("name")
+        if name:
+            return str(name)
+    sources = embedded.get("sources")
+    if isinstance(sources, list) and sources:
+        name = sources[0].get("name")
+        if name:
+            return str(name)
+    name = lead.get("source_name")
+    if name:
+        return str(name)
+    return None
 
 
 async def _get_last_updated_at(pool) -> int | None:
     row = await pool.fetchrow("SELECT MAX(amo_updated_at) AS max_ts FROM deals")
     if not row or row["max_ts"] is None:
         return None
-    return int(row["max_ts"])
+    max_ts = row["max_ts"]
+    if isinstance(max_ts, datetime):
+        if max_ts.tzinfo is not None:
+            return int(max_ts.timestamp())
+        return int(max_ts.replace(tzinfo=timezone.utc).timestamp())
+    return _to_int(max_ts)
 
 async def _get_last_event_ts(pool) -> int | None:
     row = await pool.fetchrow("SELECT MAX(created_at) AS max_ts FROM chat_events")
     if not row or row["max_ts"] is None:
         return None
-    return int(row["max_ts"])
+    max_ts = row["max_ts"]
+    if isinstance(max_ts, datetime):
+        if max_ts.tzinfo is not None:
+            return int(max_ts.timestamp())
+        return int(max_ts.replace(tzinfo=timezone.utc).timestamp())
+    return _to_int(max_ts)
 
 
 async def _upsert_pipelines(pool, pipelines: list[dict]) -> int:
@@ -190,14 +247,14 @@ async def _upsert_deals(
         INSERT INTO deals (
             amo_deal_id, pipeline_id, status_id, responsible_user_id, source_name, price,
             city, tariff, format, hours_count, hosts_count, event_date, start_time,
-            address, persons_count, payment_method, amo_created_at, amo_closed_at,
-            amo_updated_at, synced_at
+            address, persons_count, payment_method, host_price, profit, amo_created_at,
+            amo_closed_at, amo_updated_at, synced_at
         )
         VALUES (
             $1, $2, $3, $4, $5, $6,
             $7, $8, $9, $10, $11, $12, $13,
             $14, $15, $16, $17, $18, $19,
-            $20
+            $20, $21, $22
         )
         ON CONFLICT (amo_deal_id)
         DO UPDATE SET
@@ -216,6 +273,8 @@ async def _upsert_deals(
             address = EXCLUDED.address,
             persons_count = EXCLUDED.persons_count,
             payment_method = EXCLUDED.payment_method,
+            host_price = EXCLUDED.host_price,
+            profit = EXCLUDED.profit,
             amo_created_at = EXCLUDED.amo_created_at,
             amo_closed_at = EXCLUDED.amo_closed_at,
             amo_updated_at = EXCLUDED.amo_updated_at,
@@ -235,11 +294,9 @@ async def _upsert_deals(
         status_id = int(status_id_raw) if status_id_raw is not None else None
         manager_id_raw = lead.get("responsible_user_id")
         manager_id = int(manager_id_raw) if manager_id_raw is not None else None
-        source_name = None
-        embedded = lead.get("_embedded", {})
-        source = embedded.get("source") or {}
-        if isinstance(source, dict):
-            source_name = source.get("name")
+        if manager_id == 0:
+            manager_id = None
+        source_name = _extract_source_name(lead)
 
         custom_fields = lead.get("custom_fields_values") or []
         city = _extract_text(custom_fields, FIELD_IDS["city"])
@@ -247,11 +304,21 @@ async def _upsert_deals(
         format_value = _extract_text(custom_fields, FIELD_IDS["format"])
         hours_count = _extract_int(custom_fields, FIELD_IDS["hours_count"])
         hosts_count = _extract_int(custom_fields, FIELD_IDS["hosts_count"])
-        event_date = _extract_int(custom_fields, FIELD_IDS["event_date"])
+        event_date = _to_date(_extract_int(custom_fields, FIELD_IDS["event_date"]))
         start_time = _extract_text(custom_fields, FIELD_IDS["start_time"])
         address = _extract_text(custom_fields, FIELD_IDS["address"])
         persons_count = _extract_int(custom_fields, FIELD_IDS["persons_count"])
         payment_method = _extract_text(custom_fields, FIELD_IDS["payment_method"])
+        host_price = _extract_int(custom_fields, FIELD_IDS["host_price"])
+        deal_price = _to_int(lead.get("price"))
+        profit = None
+        if deal_price is not None and host_price is not None:
+            profit = deal_price - host_price
+
+        created_at = _to_datetime(lead.get("created_at"))
+        updated_at = _to_datetime(lead.get("updated_at"))
+        if created_at is None or updated_at is None:
+            continue
 
         records.append(
             (
@@ -260,7 +327,7 @@ async def _upsert_deals(
                 status_id,
                 manager_id,
                 str(source_name) if source_name else None,
-                _to_int(lead.get("price")),
+                deal_price,
                 city,
                 tariff,
                 format_value,
@@ -271,9 +338,11 @@ async def _upsert_deals(
                 address,
                 persons_count,
                 payment_method,
-                _to_int(lead.get("created_at")) or 0,
-                _to_int(lead.get("closed_at")),
-                _to_int(lead.get("updated_at")) or 0,
+                host_price,
+                profit,
+                created_at,
+                _to_datetime(lead.get("closed_at")),
+                updated_at,
                 synced_at,
             )
         )
@@ -361,7 +430,9 @@ async def _upsert_chat_events(pool, events: list[dict]) -> int:
             direction = "outbound"
         else:
             continue
-        created_at = _to_int(event.get("created_at")) or 0
+        created_at = _to_datetime(event.get("created_at"))
+        if created_at is None:
+            continue
         created_by = _to_int(event.get("created_by"))
         amo_user_id = None if not created_by else created_by
         records.append(
