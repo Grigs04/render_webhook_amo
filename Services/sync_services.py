@@ -1,12 +1,14 @@
 import logging
 import time
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, timedelta, date
 from typing import Any
 
 from Clients import amocrm
 from Clients.db import get_pool
 
 logger = logging.getLogger("sync")
+
+TZ_GMT_PLUS_3 = timezone(timedelta(hours=3))
 
 PIPELINE_ID = 9411942
 WON_STATUS_IDS = {142, 75366150, 78036790}
@@ -36,7 +38,8 @@ def _to_datetime(value: Any) -> datetime | None:
         return None
     if ts > 10_000_000_000:
         ts = int(ts / 1000)
-    return datetime.fromtimestamp(ts)
+    # DB uses TIMESTAMP without timezone, so store local GMT+3 as naive datetime
+    return datetime.fromtimestamp(ts, tz=TZ_GMT_PLUS_3).replace(tzinfo=None)
 
 
 def _to_date(value: Any) -> date | None:
@@ -45,7 +48,7 @@ def _to_date(value: Any) -> date | None:
         return None
     if ts > 10_000_000_000:
         ts = int(ts / 1000)
-    return datetime.fromtimestamp(ts).date()
+    return datetime.fromtimestamp(ts, tz=TZ_GMT_PLUS_3).date()
 
 
 def _first_value(field: dict) -> Any:
@@ -134,7 +137,7 @@ async def _get_last_updated_at(pool) -> int | None:
     if isinstance(max_ts, datetime):
         if max_ts.tzinfo is not None:
             return int(max_ts.timestamp())
-        return int(max_ts.replace(tzinfo=timezone.utc).timestamp())
+        return int(max_ts.replace(tzinfo=TZ_GMT_PLUS_3).timestamp())
     return _to_int(max_ts)
 
 async def _get_last_event_ts(pool) -> int | None:
@@ -145,7 +148,7 @@ async def _get_last_event_ts(pool) -> int | None:
     if isinstance(max_ts, datetime):
         if max_ts.tzinfo is not None:
             return int(max_ts.timestamp())
-        return int(max_ts.replace(tzinfo=timezone.utc).timestamp())
+        return int(max_ts.replace(tzinfo=TZ_GMT_PLUS_3).timestamp())
     return _to_int(max_ts)
 
 
