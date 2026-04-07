@@ -10,7 +10,6 @@ logger = logging.getLogger("sync")
 
 TZ_GMT_PLUS_3 = timezone(timedelta(hours=3))
 
-PIPELINE_ID = 9411942
 WON_STATUS_IDS = {142, 75366150, 78036790}
 LOST_STATUS_IDS = {143}
 FIELD_IDS = {
@@ -165,7 +164,7 @@ async def _upsert_pipelines(pool, pipelines: list[dict]) -> int:
     records = [
         (int(p["id"]), p.get("name") or "", synced_at)
         for p in pipelines
-        if p.get("id") and int(p["id"]) == PIPELINE_ID
+        if p.get("id")
     ]
     if not records:
         return 0
@@ -202,8 +201,6 @@ async def _upsert_statuses(pool, statuses: list[dict]) -> int:
         status_id = status.get("id")
         pipeline_id = status.get("pipeline_id")
         if not status_id or not pipeline_id:
-            continue
-        if int(pipeline_id) != PIPELINE_ID:
             continue
         records.append(
             (
@@ -250,14 +247,14 @@ async def _upsert_deals(
         INSERT INTO deals (
             amo_deal_id, pipeline_id, status_id, responsible_user_id, source_name, price,
             city, tariff, format, hours_count, hosts_count, event_date, start_time,
-            address, persons_count, payment_method, host_price, profit, amo_created_at,
-            amo_closed_at, amo_updated_at, synced_at
+            address, persons_count, payment_method, is_deleted, host_price, profit,
+            amo_created_at, amo_closed_at, amo_updated_at, synced_at
         )
         VALUES (
             $1, $2, $3, $4, $5, $6,
             $7, $8, $9, $10, $11, $12, $13,
             $14, $15, $16, $17, $18, $19,
-            $20, $21, $22
+            $20, $21, $22, $23
         )
         ON CONFLICT (amo_deal_id)
         DO UPDATE SET
@@ -276,6 +273,7 @@ async def _upsert_deals(
             address = EXCLUDED.address,
             persons_count = EXCLUDED.persons_count,
             payment_method = EXCLUDED.payment_method,
+            is_deleted = EXCLUDED.is_deleted,
             host_price = EXCLUDED.host_price,
             profit = EXCLUDED.profit,
             amo_created_at = EXCLUDED.amo_created_at,
@@ -291,8 +289,6 @@ async def _upsert_deals(
             continue
         pipeline_id_raw = lead.get("pipeline_id")
         pipeline_id = int(pipeline_id_raw) if pipeline_id_raw is not None else None
-        if pipeline_id != PIPELINE_ID:
-            continue
         status_id_raw = lead.get("status_id")
         status_id = int(status_id_raw) if status_id_raw is not None else None
         manager_id_raw = lead.get("responsible_user_id")
@@ -312,6 +308,7 @@ async def _upsert_deals(
         address = _extract_text(custom_fields, FIELD_IDS["address"])
         persons_count = _extract_int(custom_fields, FIELD_IDS["persons_count"])
         payment_method = _extract_text(custom_fields, FIELD_IDS["payment_method"])
+        is_deleted = bool(lead.get("is_deleted", False))
         host_price = _extract_int(custom_fields, FIELD_IDS["host_price"])
         deal_price = _to_int(lead.get("price"))
         profit = None
@@ -341,6 +338,7 @@ async def _upsert_deals(
                 address,
                 persons_count,
                 payment_method,
+                is_deleted,
                 host_price,
                 profit,
                 created_at,
