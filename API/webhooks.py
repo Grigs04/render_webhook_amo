@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from Services.invoise_services import runner, checkker
 from Services.act_services import runner as act_runner
 from Services.agreement_services import run as agreement_runner
@@ -9,12 +9,21 @@ from Services.sync_services import sync_crm_to_db
 router = APIRouter()
 logger = logging.getLogger("webhooks")
 
+
+async def _run_invoice_background(entity_id: int):
+    logger.info("create-invoice background start lead_id=%s", entity_id)
+    result = await runner(entity_id)
+    if result.get("status") != "ok":
+        logger.error("create-invoice background failed lead_id=%s detail=%s", entity_id, result.get("detail"))
+    else:
+        logger.info("create-invoice background completed lead_id=%s", entity_id)
+
 @router.get("/ping")
 async def ping():
     return {"status": "ok"}
 
 @router.post("/amo/invoice")
-async def create_invoice_from_amo(request: Request):
+async def create_invoice_from_amo(request: Request, background_tasks: BackgroundTasks):
     logger.info("create-invoice webhook received")
     form = await request.form()
 
@@ -25,15 +34,12 @@ async def create_invoice_from_amo(request: Request):
     entity_id = int(raw_id)
 
     logger.info("create-invoice lead_id=%s", entity_id)
-    result = await runner(entity_id)
-    if result.get("status") != "ok":
-        logger.error("create-invoice failed lead_id=%s detail=%s", entity_id, result.get("detail"))
-        raise HTTPException(status_code=400, detail=result)
-    logger.info("create-invoice completed lead_id=%s", entity_id)
+    background_tasks.add_task(_run_invoice_background, entity_id)
+    logger.info("create-invoice accepted lead_id=%s", entity_id)
 
     return {
         "status": "ok",
-        "message": "Webhook received",
+        "message": "Webhook received, invoice task queued",
         "entity_id": entity_id
     }
 
