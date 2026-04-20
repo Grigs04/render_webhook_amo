@@ -182,7 +182,7 @@ async def update_lead_custom_field(lead_id: int, field_id: int, value):
 
 
 async def get_orders_uuid():
-    leads = await get_deals_by_status(75366150)  # DOCUMENTS/PREPAYMENT
+    leads = await get_deals_by_status(75366150)
     for lead in leads:
         lead_uuid = None
 

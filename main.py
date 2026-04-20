@@ -4,6 +4,7 @@ import logging
 from fastapi import FastAPI
 from API.webhooks import router as webhook_router
 from API.dashboard import router as dashboard_router
+from API.max_bot import router as max_bot_router
 import Clients.amocrm as amocrm_client
 import Clients.tochka as tochka_client
 from Clients.db import init_pool, close_pool
@@ -23,6 +24,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(webhook_router)
 app.include_router(dashboard_router)
+app.include_router(max_bot_router)
 
 logging.basicConfig(
     level=logging.INFO,

@@ -1,0 +1,64 @@
+@startuml
+title amo_webhook_render - Architecture (High Level)
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+
+package "App" {
+  [main.py] as Main
+}
+
+package "API Layer" {
+  [API/webhooks.py] as ApiWebhooks
+  [API/max_bot.py] as ApiMaxBot
+}
+
+package "Service Layer" {
+  [Services/invoise_services.py] as SvcInvoice
+  [Services/act_services.py] as SvcAct
+  [Services/agreement_services.py] as SvcAgreement
+  [Services/sync_services.py] as SvcSync
+  [Services/max_report_services.py] as SvcMaxReport
+}
+
+package "Client/Infra Layer" {
+  [Clients/amocrm.py] as CliAmo
+  [Clients/tochka.py] as CliTochka
+  [Clients/db.py] as CliDb
+}
+
+database "PostgreSQL (Neon)" as Neon
+cloud "amoCRM API" as AmoApi
+cloud "Tochka API" as TochkaApi
+cloud "Google Sheets" as GSheets
+cloud "MAX API" as MaxApi
+
+Main --> ApiWebhooks
+Main --> ApiMaxBot
+
+ApiWebhooks --> SvcInvoice
+ApiWebhooks --> SvcAct
+ApiWebhooks --> SvcAgreement
+ApiWebhooks --> SvcSync
+
+ApiMaxBot --> SvcMaxReport
+ApiMaxBot --> MaxApi
+
+SvcInvoice --> CliAmo
+SvcInvoice --> CliTochka
+
+SvcAct --> CliAmo
+SvcAct --> CliTochka
+
+SvcAgreement --> CliAmo
+
+SvcSync --> CliAmo
+SvcSync --> CliDb
+
+SvcMaxReport --> CliDb
+
+CliAmo --> AmoApi
+CliTochka --> TochkaApi
+CliDb --> Neon
+GSheets --> Neon : data export/load
+
+@enduml
