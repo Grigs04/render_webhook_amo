@@ -8,13 +8,16 @@ from API.max_bot import router as max_bot_router
 import Clients.amocrm as amocrm_client
 import Clients.tochka as tochka_client
 from Clients.db import init_pool, close_pool
+from Services.max_polling_bot import start_polling_if_enabled, stop_polling
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         await init_pool()
+        await start_polling_if_enabled()
         yield
     finally:
+        await stop_polling()
         await close_pool()
         if not amocrm_client.client.is_closed:
             await amocrm_client.client.aclose()
