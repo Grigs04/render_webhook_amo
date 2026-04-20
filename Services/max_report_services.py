@@ -107,16 +107,16 @@ async def build_weekly_report_text() -> str:
     prev = await _period_metrics(prev_start, prev_end)
 
     lines = [
-        "Еженедельный отчет",
-        f"Период: {current_start:%d.%m.%Y} - {(current_end - timedelta(days=1)):%d.%m.%Y}",
+        "📈 Еженедельный отчет",
+        f"🗓 Период: {current_start:%d.%m.%Y} - {(current_end - timedelta(days=1)):%d.%m.%Y}",
         "",
-        f"Заявки: {curr['applications']} | {_fmt_delta(curr['applications'], prev['applications'])}",
-        f"Заказы: {curr['orders']} | {_fmt_delta(curr['orders'], prev['orders'])}",
-        f"Конверсия: {curr['conversion']:.1f}% | {_fmt_delta(curr['conversion'], prev['conversion'], '%')}",
-        f"Выручка: {curr['revenue']} ₽ | {_fmt_delta(curr['revenue'], prev['revenue'], ' ₽')}",
-        f"Прибыль: {curr['profit']} ₽ | {_fmt_delta(curr['profit'], prev['profit'], ' ₽')}",
-        f"Средний чек: {curr['avg_check']:.0f} ₽ | {_fmt_delta(curr['avg_check'], prev['avg_check'], ' ₽')}",
-        f"Среднее время ответа: {curr['avg_response_seconds']:.0f} c | {_fmt_delta(curr['avg_response_seconds'], prev['avg_response_seconds'], ' c')}",
+        f"🧾 Заявки: {curr['applications']} | {_fmt_delta(curr['applications'], prev['applications'])}",
+        f"✅ Заказы: {curr['orders']} | {_fmt_delta(curr['orders'], prev['orders'])}",
+        f"🎯 Конверсия: {curr['conversion']:.1f}% | {_fmt_delta(curr['conversion'], prev['conversion'], '%')}",
+        f"💰 Выручка: {curr['revenue']} ₽ | {_fmt_delta(curr['revenue'], prev['revenue'], ' ₽')}",
+        f"📊 Прибыль: {curr['profit']} ₽ | {_fmt_delta(curr['profit'], prev['profit'], ' ₽')}",
+        f"🛒 Средний чек: {curr['avg_check']:.0f} ₽ | {_fmt_delta(curr['avg_check'], prev['avg_check'], ' ₽')}",
+        f"⏱ Среднее время ответа: {curr['avg_response_seconds']:.0f} c | {_fmt_delta(curr['avg_response_seconds'], prev['avg_response_seconds'], ' c')}",
     ]
     return "\n".join(lines)
 
@@ -153,14 +153,14 @@ async def build_stats_command_text() -> str:
     in_work = int(row["in_work"] or 0)
     denominator = applications - in_work
     conversion = (sales / denominator * 100.0) if denominator > 0 else 0.0
-    grade = "конверсия ниже нормы" if conversion < 20.0 else "все ок"
+    grade = "⚠️ конверсия ниже нормы" if conversion < 20.0 else "✅ все ок"
 
     lines = [
-        f"Статистика за последние 7 дней ({start_dt:%d.%m.%Y} - {now:%d.%m.%Y})",
-        f"количество заявок - {applications}",
-        f"количество продаж - {sales}",
-        f"количество заявок в работе - {in_work}",
-        f"конверсия - {conversion:.1f}%",
-        f"оценка - {grade}",
+        f"📊 Статистика за последние 7 дней ({start_dt:%d.%m.%Y} - {now:%d.%m.%Y})",
+        f"🧾 Количество заявок: {applications}",
+        f"✅ Количество продаж: {sales}",
+        f"🛠 Количество заявок в работе: {in_work}",
+        f"🎯 Конверсия: {conversion:.1f}%",
+        f"🧠 Оценка: {grade}",
     ]
     return "\n".join(lines)
