@@ -110,7 +110,4 @@ def compute_conversion_by_manager() -> Dict[str, dict]:
 
 
 if __name__ == "__main__":
-    if not AMO_BASE_URL or not AMO_TOKEN:
-        raise SystemExit("AMO_BASE_URL/AMO_TOKEN are required")
-    result = compute_conversion_by_manager()
-    print(result)
+    print(5)

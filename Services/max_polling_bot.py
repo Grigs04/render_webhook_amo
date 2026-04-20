@@ -13,7 +13,7 @@ load_dotenv()
 logger = logging.getLogger("max-polling")
 
 MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")
-MAX_POLLING_ENABLED = os.getenv("MAX_POLLING_ENABLED", "false").lower() in {"1", "true", "yes"}
+MAX_POLLING_ENABLED = os.getenv("MAX_POLLING_ENABLED", "true").lower() in {"1", "true", "yes"}
 
 bot = Bot(MAX_BOT_TOKEN)
 dp = Dispatcher()
@@ -50,6 +50,7 @@ async def start_polling_if_enabled():
         return
     if _polling_task and not _polling_task.done():
         return
+    logger.info("MAX polling is enabled, creating polling task")
     _polling_task = asyncio.create_task(_run_polling(), name="max-polling")
 
 
