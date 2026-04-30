@@ -106,6 +106,6 @@ async def update_table(format: int = 0):
 
 
 @router.post("/amo/sync-db")
-async def sync_db(updated_from: int | None = None, full: bool = False):
-    result = await sync_crm_to_db(updated_from=updated_from, full=full)
+async def sync_db(updated_from: int | None = None, full: bool = False, check_deleted: bool = False):
+    result = await sync_crm_to_db(updated_from=updated_from, full=full, check_deleted=check_deleted)
     return {"status": "ok", **result}

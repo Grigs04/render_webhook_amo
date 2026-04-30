@@ -544,11 +544,36 @@ async def sync_deals_and_events(updated_from: int | None = None) -> dict[str, in
     }
 
 
+async def _sync_deleted_deals() -> int:
+    pool = await get_pool()
+    rows = await pool.fetch("SELECT amo_deal_id FROM deals WHERE is_deleted = FALSE")
+    db_ids = {int(row["amo_deal_id"]) for row in rows}
+    if not db_ids:
+        return 0
+
+    all_leads = await amocrm.get_leads_updated(updated_from=0)
+    crm_ids = {int(lead["id"]) for lead in all_leads if lead.get("id")}
+
+    deleted_ids = list(db_ids - crm_ids)
+    if not deleted_ids:
+        logger.info("check_deleted: no deleted deals found")
+        return 0
+
+    logger.info("check_deleted: marking %d deals as deleted", len(deleted_ids))
+    return await _mark_deals_deleted(pool, deleted_ids)
+
+
 async def sync_crm_to_db(
-    updated_from: int | None = None, full: bool = False
+    updated_from: int | None = None, full: bool = False, check_deleted: bool = False
 ) -> dict[str, int]:
     if not full:
-        return await sync_deals_and_events(updated_from=updated_from)
-    ref_result = await sync_reference_data()
-    data_result = await sync_deals_and_events(updated_from=updated_from)
-    return {**ref_result, **data_result}
+        result = await sync_deals_and_events(updated_from=updated_from)
+    else:
+        ref_result = await sync_reference_data()
+        data_result = await sync_deals_and_events(updated_from=updated_from)
+        result = {**ref_result, **data_result}
+
+    if check_deleted:
+        result["deleted"] = await _sync_deleted_deals()
+
+    return result
