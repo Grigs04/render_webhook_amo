@@ -29,7 +29,6 @@ package "Client/Infra Layer" {
 database "PostgreSQL (Neon)" as Neon
 cloud "amoCRM API" as AmoApi
 cloud "Tochka API" as TochkaApi
-cloud "Google Sheets" as GSheets
 cloud "MAX API" as MaxApi
 
 Main --> ApiWebhooks

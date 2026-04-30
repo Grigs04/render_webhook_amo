@@ -366,6 +366,17 @@ def _event_origin(event: dict) -> str | None:
     return str(origin) if origin else None
 
 
+async def _mark_deals_deleted(pool, deal_ids: list[int]) -> int:
+    if not deal_ids:
+        return 0
+    await pool.execute(
+        "UPDATE deals SET is_deleted = TRUE, synced_at = $1 WHERE amo_deal_id = ANY($2)",
+        _now_ts(),
+        deal_ids,
+    )
+    return len(deal_ids)
+
+
 async def _ensure_deals_exist(pool, deal_ids: list[int]) -> int:
     if not deal_ids:
         return 0
@@ -375,18 +386,31 @@ async def _ensure_deals_exist(pool, deal_ids: list[int]) -> int:
     )
     existing = {int(row["amo_deal_id"]) for row in rows}
     missing = [deal_id for deal_id in deal_ids if deal_id not in existing]
-    if not missing:
-        return 0
+
     leads: list[dict] = []
+    ids_to_delete: list[int] = []
+
     for deal_id in missing:
         try:
             lead = await amocrm.get_lead(deal_id)
             leads.append(lead)
+        except amocrm.LeadDeletedError:
+            logger.info("lead not found in amo (204), skipping deal_id=%s", deal_id)
         except Exception:
             logger.exception("failed to fetch deal for event deal_id=%s", deal_id)
-    if not leads:
-        return 0
-    return await _upsert_deals(pool, leads)
+
+    for deal_id in existing:
+        try:
+            await amocrm.get_lead(deal_id)
+        except amocrm.LeadDeletedError:
+            ids_to_delete.append(deal_id)
+            logger.info("deal deleted in amo, marking is_deleted=True deal_id=%s", deal_id)
+        except Exception:
+            logger.exception("failed to check deletion status deal_id=%s", deal_id)
+
+    inserted = await _upsert_deals(pool, leads)
+    deleted = await _mark_deals_deleted(pool, ids_to_delete)
+    return inserted + deleted
 
 async def _get_existing_deal_ids(pool, deal_ids: list[int]) -> set[int]:
     if not deal_ids:

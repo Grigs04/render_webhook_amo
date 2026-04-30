@@ -1,9 +1,10 @@
 venv
 .env
 __pycache__/
-test.py
+tests/
 *.pyc
 google_service_account.json
 Договор №26 от 04.03.2026.docx
 statistic.py
 migrations.sql
+.claude

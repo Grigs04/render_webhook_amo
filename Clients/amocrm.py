@@ -22,6 +22,11 @@ class AmoDataError(Exception):
         super().__init__(message)
 
 
+class LeadDeletedError(Exception):
+    def __init__(self, lead_id: int):
+        self.lead_id = lead_id
+        super().__init__(f"Lead {lead_id} not found (204)")
+
 
 async def notify_manager(order_id: int, text: str):
     try:
@@ -82,6 +87,8 @@ async def get_lead(lead_id: int) -> dict:
         url=f'{AMO_BASE_URL}/leads/{lead_id}',
         params={"with": "contacts,source"},
     )
+    if response.status_code == 204:
+        raise LeadDeletedError(lead_id)
     response.raise_for_status()
     return response.json()
 
