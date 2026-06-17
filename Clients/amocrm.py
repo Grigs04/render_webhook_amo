@@ -228,6 +228,8 @@ async def get_deals_by_status(status_id: int):
                 "with": "contacts",
             },
         )
+        if response.status_code == 204 or not response.content:
+            break
         response.raise_for_status()
         payload = response.json()
         leads = payload.get("_embedded", {}).get("leads", [])
@@ -310,6 +312,8 @@ async def get_leads_updated(
             url=f"{AMO_BASE_URL}/leads",
             params=params,
         )
+        if response.status_code == 204 or not response.content:
+            break
         response.raise_for_status()
         payload = response.json()
         batch = payload.get("_embedded", {}).get("leads", [])

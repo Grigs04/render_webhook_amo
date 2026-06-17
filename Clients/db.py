@@ -15,7 +15,7 @@ async def init_pool() -> asyncpg.Pool:
         return _pool
     if not NEON_URL:
         raise RuntimeError("NEON_URL is required")
-    _pool = await asyncpg.create_pool(dsn=NEON_URL, min_size=1, max_size=5)
+    _pool = await asyncpg.create_pool(dsn=NEON_URL, min_size=1, max_size=5, timeout=30)
     return _pool
 
 

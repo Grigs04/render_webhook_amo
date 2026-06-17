@@ -18,10 +18,8 @@ def _get_custom_field(custom_fields: list[dict[str, Any]], name: str) -> str:
         values = field.get("values") or []
         if not values:
             return ""
-        value = values[0].get("value")
-        if value is None:
-            return ""
-        return str(value)
+        parts = [str(v["value"]) for v in values if v.get("value") is not None]
+        return ", ".join(parts)
     return ""
 
 
@@ -49,8 +47,6 @@ def _format_date(value: str) -> str:
 
 def _get_contact_value(contact: dict) -> str:
     custom_fields = contact.get("custom_fields_values") or []
-    phone = ""
-    tg = ""
     for field in custom_fields:
         field_code = field.get("field_code")
         field_name = (field.get("field_name") or "").lower()
@@ -60,12 +56,9 @@ def _get_contact_value(contact: dict) -> str:
         value = values[0].get("value")
         if value is None:
             continue
-        value = str(value)
         if field_code == "PHONE" or "телефон" in field_name:
-            phone = value
-        if "telegram" in field_name or "телеграм" in field_name or "tg" == field_name:
-            tg = value
-    return phone or tg
+            return str(value).replace(" ", "")
+    return ""
 
 
 async def update_deals_sheet(apply_format: bool = False) -> dict[str, int]:
@@ -106,7 +99,7 @@ async def update_deals_sheet(apply_format: bool = False) -> dict[str, int]:
         tariff = _get_custom_field(custom_fields, "Тариф")
         start_time = _get_custom_field(custom_fields, "Время начала")
         hours = _get_custom_field(custom_fields, "Количество часов")
-        people_count = _get_custom_field(custom_fields, "Кол-во человек")
+        people_count = _get_custom_field(custom_fields, "Количество чел.")
         note = _get_custom_field(custom_fields, "Примечание к заказу")
         host = _get_custom_field(custom_fields, "Ведущий")
         payment_method = _get_custom_field(custom_fields, "Способ оплаты")

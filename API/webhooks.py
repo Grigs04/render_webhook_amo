@@ -5,6 +5,8 @@ from Services.act_services import runner as act_runner
 from Services.agreement_services import run as agreement_runner
 from Services.sheets_services import update_deals_sheet
 from Services.sync_services import sync_crm_to_db
+from Services.sheets_sync_service import run_incremental_sync
+from Services.manager_sheets_service import update_manager_sheet
 
 router = APIRouter()
 logger = logging.getLogger("webhooks")
@@ -102,6 +104,18 @@ async def create_agreement(request: Request):
 @router.post('/amo/table')
 async def update_table(format: int = 0):
     result = await update_deals_sheet(apply_format=bool(format))
+    return {"status": "ok", **result}
+
+
+@router.post("/amo/sheets-sync")
+async def sheets_sync():
+    result = await run_incremental_sync()
+    return {"status": "ok", **result}
+
+
+@router.post("/amo/managers-table")
+async def managers_table(format: int = 0):
+    result = await update_manager_sheet(apply_format=bool(format))
     return {"status": "ok", **result}
 
 

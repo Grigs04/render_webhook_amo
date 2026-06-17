@@ -9,15 +9,18 @@ import Clients.amocrm as amocrm_client
 import Clients.tochka as tochka_client
 from Clients.db import init_pool, close_pool
 from Services.max_polling_bot import start_polling_if_enabled, stop_polling
+from Services.sheets_sync_service import start_sheets_sync, stop_sheets_sync
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         await init_pool()
         await start_polling_if_enabled()
+        await start_sheets_sync()
         yield
     finally:
         await stop_polling()
+        await stop_sheets_sync()
         await close_pool()
         if not amocrm_client.client.is_closed:
             await amocrm_client.client.aclose()
