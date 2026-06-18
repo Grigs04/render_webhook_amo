@@ -1,6 +1,8 @@
 import anyio
-from datetime import date
+from datetime import date, datetime, timezone, timedelta
 from typing import Any
+
+_MSK = timezone(timedelta(hours=3))
 
 from Clients import amocrm
 from Clients import google_sheets
@@ -47,7 +49,7 @@ def _format_date(value: str) -> str:
         timestamp = int(value)
     except ValueError:
         return value
-    return date.fromtimestamp(timestamp).isoformat()
+    return datetime.fromtimestamp(timestamp, tz=_MSK).date().isoformat()
 
 
 def _get_contact_value(contact: dict) -> str:
