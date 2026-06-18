@@ -254,6 +254,81 @@ def _rule(sheet_id: int, col: int, formula: str, color: dict) -> dict:
 
 _YELLOW = {"red": 1.0, "green": 0.898, "blue": 0.6}
 _RED = {"red": 0.918, "green": 0.6, "blue": 0.6}
+_GREEN_DATE = {"red": 0.714, "green": 0.843, "blue": 0.659}
+_YELLOW_DATE = {"red": 1.0, "green": 0.949, "blue": 0.741}
+_WHITE = {"red": 1.0, "green": 1.0, "blue": 1.0}
+
+
+def _build_date_color_requests(col_ab: list, sheet_id: int, ncols: int) -> list[dict]:
+    today = date.today()
+    requests = []
+    for idx in range(1, len(col_ab)):
+        row = col_ab[idx]
+        if not row or not row[0]:
+            continue
+        date_str = row[1] if len(row) > 1 else ""
+        try:
+            deal_date = date.fromisoformat(date_str) if date_str else None
+        except ValueError:
+            deal_date = None
+        if deal_date is None or deal_date > today:
+            color = _WHITE
+        elif deal_date < today:
+            color = _GREEN_DATE
+        else:
+            color = _YELLOW_DATE
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": idx,
+                    "endRowIndex": idx + 1,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": ncols,
+                },
+                "cell": {"userEnteredFormat": {"backgroundColor": color}},
+                "fields": "userEnteredFormat.backgroundColor",
+            }
+        })
+    return requests
+
+
+def refresh_main_date_colors() -> None:
+    if not SPREADSHEET_ID:
+        return
+    service = _get_service()
+    sheet_name = _get_sheet_name()
+    try:
+        sheet_id = _get_sheet_id(service, sheet_name)
+    except ValueError:
+        return
+    col_ab = service.spreadsheets().values().get(
+        spreadsheetId=SPREADSHEET_ID, range=f"'{sheet_name}'!A:B"
+    ).execute().get("values", [])
+    reqs = _build_date_color_requests(col_ab, sheet_id, 17)
+    if reqs:
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID, body={"requests": reqs}
+        ).execute()
+
+
+def refresh_manager_date_colors() -> None:
+    if not MANAGERS_SPREADSHEET_ID:
+        return
+    service = _get_service()
+    sheet_name = _get_sheet_name()
+    try:
+        sheet_id = _get_sheet_id_in(service, MANAGERS_SPREADSHEET_ID, sheet_name)
+    except ValueError:
+        return
+    col_ab = service.spreadsheets().values().get(
+        spreadsheetId=MANAGERS_SPREADSHEET_ID, range=f"'{sheet_name}'!A:B"
+    ).execute().get("values", [])
+    reqs = _build_date_color_requests(col_ab, sheet_id, 15)
+    if reqs:
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=MANAGERS_SPREADSHEET_ID, body={"requests": reqs}
+        ).execute()
 
 
 def _yellow_blank_rules(sheet_id: int, col_indices: list[int], end_row: int) -> list[dict]:

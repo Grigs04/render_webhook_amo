@@ -119,8 +119,6 @@ async def run_incremental_sync(since_override: int | None = None) -> dict:
         res = await anyio.to_thread.run_sync(lambda: google_sheets.upsert_deals(main_rows, False))
         upserted = res.get("updated", 0) + res.get("added", 0)
         logger.info("sheets-sync: main upserted %d", upserted)
-        upserted_ids = [did for did, _ in main_rows]
-        await anyio.to_thread.run_sync(lambda: google_sheets.reset_deals_color(upserted_ids))
 
     # Запись в таблицу менеджеров
     mgr_added = 0
@@ -128,12 +126,14 @@ async def run_incremental_sync(since_override: int | None = None) -> dict:
         res = await anyio.to_thread.run_sync(lambda: google_sheets.upsert_manager_deals(manager_rows, False))
         mgr_added = res.get("added", 0)
         logger.info("sheets-sync: managers upserted %d", res.get("updated", 0) + mgr_added)
-        upserted_ids = [did for did, _ in manager_rows]
-        await anyio.to_thread.run_sync(lambda: google_sheets.reset_manager_deals_color(upserted_ids))
         if mgr_added > 0:
             await extend_manager_checkboxes_async()
 
-    # Красный цвет в обеих таблицах
+    # Цвет строк по дате (прошедшие=зелёный, сегодня=жёлтый, будущие=белый)
+    await anyio.to_thread.run_sync(google_sheets.refresh_main_date_colors)
+    await anyio.to_thread.run_sync(google_sheets.refresh_manager_date_colors)
+
+    # Красный для отменённых — поверх даты, всегда последним
     marked_red = 0
     if to_mark_red_ids:
         marked_red = await anyio.to_thread.run_sync(lambda: google_sheets.mark_deals_red(to_mark_red_ids))

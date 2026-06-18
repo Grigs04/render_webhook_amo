@@ -6,8 +6,6 @@ from datetime import date, datetime, timedelta
 from typing import Any
 import anyio
 import io
-from docxtpl import DocxTemplate
-from docx2pdf import convert as docx2pdf_convert
 
 import Clients.amocrm as amo
 
@@ -227,6 +225,7 @@ def _get_company_field(company: dict[str, Any], keys: list[str]) -> str:
 
 
 def _render_contract(template_path: str, context: dict[str, Any]) -> bytes:
+    from docxtpl import DocxTemplate
     doc = DocxTemplate(template_path)
     doc.render(context)
     with io.BytesIO() as buffer:
@@ -235,6 +234,7 @@ def _render_contract(template_path: str, context: dict[str, Any]) -> bytes:
 
 
 def _convert_docx_to_pdf_bytes(docx_bytes: bytes) -> bytes:
+    from docx2pdf import convert as docx2pdf_convert
     with tempfile.TemporaryDirectory() as tmpdir:
         docx_path = os.path.join(tmpdir, "contract.docx")
         pdf_path = os.path.join(tmpdir, "contract.pdf")
