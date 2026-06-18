@@ -292,24 +292,25 @@ def upsert_deals(
         sheet_id = _get_sheet_id(service, sheet_name)
         created = False
 
-    values_resp = (
+    col_a = (
         service.spreadsheets()
         .values()
-        .get(spreadsheetId=SPREADSHEET_ID, range=f"'{sheet_name}'!A:Q")
+        .get(spreadsheetId=SPREADSHEET_ID, range=f"'{sheet_name}'!A:A")
         .execute()
-    )
-    values = values_resp.get("values", [])
+    ).get("values", [])
 
-    if not values or not values[0] or values[0][0] != HEADERS[0]:
+    if not col_a or not col_a[0] or col_a[0][0] != HEADERS[0]:
         service.spreadsheets().values().update(
             spreadsheetId=SPREADSHEET_ID,
             range=f"'{sheet_name}'!A1:Q1",
             valueInputOption="RAW",
             body={"values": [HEADERS]},
         ).execute()
+        if not col_a:
+            col_a = [[HEADERS[0]]]
 
     existing_rows: dict[str, int] = {}
-    for idx, row in enumerate(values, start=1):
+    for idx, row in enumerate(col_a, start=1):
         if idx == 1:
             continue
         if row and row[0]:
@@ -373,13 +374,7 @@ def upsert_deals(
             body={"valueInputOption": "USER_ENTERED", "data": missing_updates},
         ).execute()
 
-    updated = (
-        service.spreadsheets()
-        .values()
-        .get(spreadsheetId=SPREADSHEET_ID, range=f"'{sheet_name}'!A:Q")
-        .execute()
-    )
-    last_row = len(updated.get("values", []))
+    last_row = len(col_a) + len(append_values)
     if last_row < 2:
         return {"updated": len(update_data), "added": len(append_values)}
 
@@ -709,19 +704,22 @@ def upsert_manager_deals(
     ncols = len(MANAGER_HEADERS)
     col_range = chr(ord("A") + ncols - 1)
 
-    values_resp = service.spreadsheets().values().get(spreadsheetId=MANAGERS_SPREADSHEET_ID, range=f"'{sheet_name}'!A:{col_range}").execute()
-    values = values_resp.get("values", [])
+    col_a = service.spreadsheets().values().get(
+        spreadsheetId=MANAGERS_SPREADSHEET_ID, range=f"'{sheet_name}'!A:A"
+    ).execute().get("values", [])
 
-    if not values or not values[0] or values[0][0] != MANAGER_HEADERS[0]:
+    if not col_a or not col_a[0] or col_a[0][0] != MANAGER_HEADERS[0]:
         service.spreadsheets().values().update(
             spreadsheetId=MANAGERS_SPREADSHEET_ID,
             range=f"'{sheet_name}'!A1:{col_range}1",
             valueInputOption="RAW",
             body={"values": [MANAGER_HEADERS]},
         ).execute()
+        if not col_a:
+            col_a = [[MANAGER_HEADERS[0]]]
 
     existing_rows: dict[str, int] = {}
-    for idx, row in enumerate(values, start=1):
+    for idx, row in enumerate(col_a, start=1):
         if idx == 1:
             continue
         if row and row[0]:
@@ -752,8 +750,7 @@ def upsert_manager_deals(
             body={"valueInputOption": "USER_ENTERED", "data": [{"range": f"'{sheet_name}'!B{ri}:B{ri}", "values": [["?"]]} for ri in missing_rows]},
         ).execute()
 
-    updated_resp = service.spreadsheets().values().get(spreadsheetId=MANAGERS_SPREADSHEET_ID, range=f"'{sheet_name}'!A:{col_range}").execute()
-    last_row = len(updated_resp.get("values", []))
+    last_row = len(col_a) + len(append_values)
 
     if last_row < 2:
         return {"updated": len(update_data), "added": len(append_values)}

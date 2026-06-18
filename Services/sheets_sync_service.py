@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import logging
 import time
 
@@ -151,6 +152,7 @@ async def _sync_loop():
             await run_incremental_sync()
         except Exception:
             logger.exception("sheets-sync: unhandled error in sync loop")
+        gc.collect()
         await asyncio.sleep(SYNC_INTERVAL)
 
 
