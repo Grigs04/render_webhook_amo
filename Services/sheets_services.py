@@ -11,6 +11,11 @@ CHECKBOX_TRUE = "TRUE"
 CHECKBOX_FALSE = "FALSE"
 
 
+def _as_text(value: str) -> str:
+    """Prefix with ' so Sheets stores the value as plain text, not a number/time."""
+    return f"'{value}" if value else value
+
+
 def _get_custom_field(custom_fields: list[dict[str, Any]], name: str) -> str:
     for field in custom_fields:
         if field.get("field_name") != name:
@@ -97,9 +102,9 @@ async def update_deals_sheet(apply_format: bool = False) -> dict[str, int]:
         transfer = _get_custom_field(custom_fields, "Трансфер")
         city = _get_custom_field(custom_fields, "Город")
         tariff = _get_custom_field(custom_fields, "Тариф")
-        start_time = _get_custom_field(custom_fields, "Время начала")
-        hours = _get_custom_field(custom_fields, "Количество часов")
-        people_count = _get_custom_field(custom_fields, "Количество чел.")
+        start_time = _as_text(_get_custom_field(custom_fields, "Время начала"))
+        hours = _as_text(_get_custom_field(custom_fields, "Количество часов"))
+        people_count = _as_text(_get_custom_field(custom_fields, "Количество чел."))
         note = _get_custom_field(custom_fields, "Примечание к заказу")
         host = _get_custom_field(custom_fields, "Ведущий")
         payment_method = _get_custom_field(custom_fields, "Способ оплаты")

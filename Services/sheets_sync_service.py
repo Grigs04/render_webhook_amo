@@ -7,7 +7,7 @@ import anyio
 
 from Clients import amocrm
 from Clients import google_sheets
-from Services.sheets_services import _get_contact_value, _get_custom_field, _get_checkbox, _format_date
+from Services.sheets_services import _get_contact_value, _get_custom_field, _get_checkbox, _format_date, _as_text
 from Services.manager_sheets_service import _build_manager_row, extend_manager_checkboxes_async
 
 logger = logging.getLogger("sheets-sync")
@@ -38,9 +38,9 @@ def _build_row(lead: dict, contact_value: str) -> tuple[str, list[str]]:
             _get_custom_field(custom_fields, "Трансфер"),
             _get_custom_field(custom_fields, "Город"),
             _get_custom_field(custom_fields, "Тариф"),
-            _get_custom_field(custom_fields, "Время начала"),
-            _get_custom_field(custom_fields, "Количество часов"),
-            _get_custom_field(custom_fields, "Количество чел."),
+            _as_text(_get_custom_field(custom_fields, "Время начала")),
+            _as_text(_get_custom_field(custom_fields, "Количество часов")),
+            _as_text(_get_custom_field(custom_fields, "Количество чел.")),
             _get_custom_field(custom_fields, "Примечание к заказу"),
             contact_value,
             _get_custom_field(custom_fields, "Ведущий"),

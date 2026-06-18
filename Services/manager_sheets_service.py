@@ -4,7 +4,7 @@ import anyio
 
 from Clients import amocrm  # noqa: F401 — used in update_manager_sheet
 from Clients import google_sheets
-from Services.sheets_services import _get_contact_value, _get_custom_field, _get_checkbox, _format_date
+from Services.sheets_services import _get_contact_value, _get_custom_field, _get_checkbox, _format_date, _as_text
 
 logger = logging.getLogger("manager-sheets")
 
@@ -25,9 +25,9 @@ def _build_manager_row(lead: dict, contact_value: str) -> tuple[str, list[str]]:
             _get_custom_field(cf, "Тариф"),
             _get_custom_field(cf, "Город"),
             _get_custom_field(cf, "Адрес"),
-            _get_custom_field(cf, "Время начала"),
-            _get_custom_field(cf, "Количество часов"),
-            _get_custom_field(cf, "Количество чел."),
+            _as_text(_get_custom_field(cf, "Время начала")),
+            _as_text(_get_custom_field(cf, "Количество часов")),
+            _as_text(_get_custom_field(cf, "Количество чел.")),
             _get_custom_field(cf, "Формат"),
             _get_custom_field(cf, "Примечание к заказу"),
             _get_custom_field(cf, "Способ оплаты"),
