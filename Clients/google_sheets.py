@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 import os
 from typing import Iterable
 import re
@@ -254,9 +254,32 @@ def _rule(sheet_id: int, col: int, formula: str, color: dict) -> dict:
 
 _YELLOW = {"red": 1.0, "green": 0.898, "blue": 0.6}
 _RED = {"red": 0.918, "green": 0.6, "blue": 0.6}
-_GREEN_DATE = {"red": 0.714, "green": 0.843, "blue": 0.659}
-_YELLOW_DATE = {"red": 1.0, "green": 0.949, "blue": 0.741}
+_GREEN_DATE = {"red": 0.204, "green": 0.659, "blue": 0.325}   # #34a853
+_YELLOW_DATE = {"red": 0.984, "green": 0.737, "blue": 0.016}  # #fbbc04
 _WHITE = {"red": 1.0, "green": 1.0, "blue": 1.0}
+
+# Google Sheets date serials count days from this epoch
+_SHEETS_EPOCH = date(1899, 12, 30)
+
+
+def _parse_sheet_date(val) -> date | None:
+    """Parse a value returned by Sheets API (UNFORMATTED_VALUE) as a date.
+
+    Dates stored in Sheets come back as float serials; raw text falls back to
+    ISO parsing so local dev / freshly-written cells also work.
+    """
+    if val is None or val == "":
+        return None
+    if isinstance(val, (int, float)):
+        try:
+            return _SHEETS_EPOCH + timedelta(days=int(val))
+        except (OverflowError, ValueError):
+            return None
+    s = str(val).strip()
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        return None
 
 
 def _build_date_color_requests(col_ab: list, sheet_id: int, ncols: int) -> list[dict]:
@@ -266,11 +289,7 @@ def _build_date_color_requests(col_ab: list, sheet_id: int, ncols: int) -> list[
         row = col_ab[idx]
         if not row or not row[0]:
             continue
-        date_str = row[1] if len(row) > 1 else ""
-        try:
-            deal_date = date.fromisoformat(date_str) if date_str else None
-        except ValueError:
-            deal_date = None
+        deal_date = _parse_sheet_date(row[1] if len(row) > 1 else None)
         if deal_date is None or deal_date > today:
             color = _WHITE
         elif deal_date < today:
@@ -293,6 +312,14 @@ def _build_date_color_requests(col_ab: list, sheet_id: int, ncols: int) -> list[
     return requests
 
 
+def _fetch_col_ab(service, spreadsheet_id: str, sheet_name: str) -> list:
+    return service.spreadsheets().values().get(
+        spreadsheetId=spreadsheet_id,
+        range=f"'{sheet_name}'!A:B",
+        valueRenderOption="UNFORMATTED_VALUE",
+    ).execute().get("values", [])
+
+
 def refresh_main_date_colors() -> None:
     if not SPREADSHEET_ID:
         return
@@ -302,9 +329,7 @@ def refresh_main_date_colors() -> None:
         sheet_id = _get_sheet_id(service, sheet_name)
     except ValueError:
         return
-    col_ab = service.spreadsheets().values().get(
-        spreadsheetId=SPREADSHEET_ID, range=f"'{sheet_name}'!A:B"
-    ).execute().get("values", [])
+    col_ab = _fetch_col_ab(service, SPREADSHEET_ID, sheet_name)
     reqs = _build_date_color_requests(col_ab, sheet_id, 17)
     if reqs:
         service.spreadsheets().batchUpdate(
@@ -321,9 +346,7 @@ def refresh_manager_date_colors() -> None:
         sheet_id = _get_sheet_id_in(service, MANAGERS_SPREADSHEET_ID, sheet_name)
     except ValueError:
         return
-    col_ab = service.spreadsheets().values().get(
-        spreadsheetId=MANAGERS_SPREADSHEET_ID, range=f"'{sheet_name}'!A:B"
-    ).execute().get("values", [])
+    col_ab = _fetch_col_ab(service, MANAGERS_SPREADSHEET_ID, sheet_name)
     reqs = _build_date_color_requests(col_ab, sheet_id, 15)
     if reqs:
         service.spreadsheets().batchUpdate(

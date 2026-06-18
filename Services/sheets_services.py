@@ -142,8 +142,8 @@ async def update_deals_sheet(apply_format: bool = False) -> dict[str, int]:
             )
         )
 
-    current_ids = {deal_id for deal_id, _ in rows if deal_id}
-    current_ids.update(excluded_ids)
-    return await anyio.to_thread.run_sync(
-        google_sheets.upsert_deals, rows, apply_format, current_ids
+    result = await anyio.to_thread.run_sync(
+        google_sheets.upsert_deals, rows, apply_format, None
     )
+    await anyio.to_thread.run_sync(google_sheets.refresh_main_date_colors)
+    return result

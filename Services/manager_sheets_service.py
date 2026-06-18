@@ -73,11 +73,11 @@ async def update_manager_sheet(apply_format: bool = False) -> dict[str, int]:
                 contact_value = contact_cache[contact_id]
         rows.append(_build_manager_row(deal, contact_value))
 
-    current_ids = {deal_id for deal_id, _ in rows if deal_id}
-    current_ids.update(excluded_ids)
-    return await anyio.to_thread.run_sync(
-        lambda: google_sheets.upsert_manager_deals(rows, apply_format, current_ids)
+    result = await anyio.to_thread.run_sync(
+        lambda: google_sheets.upsert_manager_deals(rows, apply_format, None)
     )
+    await anyio.to_thread.run_sync(google_sheets.refresh_manager_date_colors)
+    return result
 
 
 
