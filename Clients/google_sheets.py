@@ -3,6 +3,8 @@ import os
 from typing import Iterable
 import re
 
+import threading
+
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -18,6 +20,9 @@ SERVICE_ACCOUNT_PATH = os.getenv(
 SPREADSHEET_ID = os.getenv("SHEETS_SPREADSHEET_ID")
 MANAGERS_SPREADSHEET_ID = os.getenv("SHEETS_MANAGERS_SPREADSHEET_ID")
 
+_service_cache = None
+_service_lock = threading.Lock()
+
 MANAGER_HEADERS = [
     "id", "Дата", "Тариф", "Город", "Адрес",
     "Время начала", "Кол-во часов", "Кол-во чел.", "Формат", "Примечание",
@@ -30,8 +35,13 @@ def _get_sheet_name(target_date: date | None = None) -> str:
 
 
 def _get_service():
-    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_PATH, scopes=SCOPES)
-    return build("sheets", "v4", credentials=creds, cache_discovery=False)
+    global _service_cache
+    if _service_cache is None:
+        with _service_lock:
+            if _service_cache is None:
+                creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_PATH, scopes=SCOPES)
+                _service_cache = build("sheets", "v4", credentials=creds, cache_discovery=False)
+    return _service_cache
 
 
 def _ensure_sheet(service, sheet_name: str) -> tuple[int, bool]:
