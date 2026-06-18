@@ -108,8 +108,8 @@ async def update_table(format: int = 0):
 
 
 @router.post("/amo/sheets-sync")
-async def sheets_sync():
-    result = await run_incremental_sync()
+async def sheets_sync(since: int | None = None):
+    result = await run_incremental_sync(since_override=since)
     return {"status": "ok", **result}
 
 

@@ -73,11 +73,13 @@ async def _fetch_lead_with_contact(lead_id: int) -> tuple[dict, str] | None:
     return lead, contact_value
 
 
-async def run_incremental_sync() -> dict:
+async def run_incremental_sync(since_override: int | None = None) -> dict:
     global _last_sync_ts
 
     now = int(time.time())
-    since = _last_sync_ts if _last_sync_ts is not None else now - 3600
+    since = since_override if since_override is not None else (
+        _last_sync_ts if _last_sync_ts is not None else now - 3600
+    )
 
     logger.info("sheets-sync: fetching leads updated since %s", since)
     all_leads = await amocrm.get_leads_updated(updated_from=since)
@@ -137,7 +139,8 @@ async def run_incremental_sync() -> dict:
         await anyio.to_thread.run_sync(lambda: google_sheets.mark_manager_deals_red(to_mark_red_ids))
         logger.info("sheets-sync: marked red %d", marked_red)
 
-    _last_sync_ts = now
+    if since_override is None:
+        _last_sync_ts = now
     return {"upserted": upserted, "marked_red": marked_red, "since": since}
 
 
