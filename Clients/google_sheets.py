@@ -476,6 +476,22 @@ def upsert_deals(
     if last_row < 2:
         return {"updated": len(update_data), "added": len(append_values)}
 
+    def _num_fmt(col_idx: int, fmt_type: str, pattern: str) -> dict:
+        return {"repeatCell": {
+            "range": {"sheetId": sheet_id, "startRowIndex": 1, "startColumnIndex": col_idx, "endColumnIndex": col_idx + 1},
+            "cell": {"userEnteredFormat": {"numberFormat": {"type": fmt_type, "pattern": pattern}}},
+            "fields": "userEnteredFormat.numberFormat",
+        }}
+
+    # Applied on every sync — keeps date/currency format on new rows
+    always_requests = [
+        _num_fmt(1, "DATE", "dd.MM.yyyy"),
+        _num_fmt(2, "NUMBER", "# ##0,00 ₽"),
+        _num_fmt(3, "NUMBER", "# ##0,00 ₽"),
+        _num_fmt(15, "NUMBER", "# ##0,00 ₽"),
+        _num_fmt(16, "NUMBER", "# ##0,00 ₽"),
+    ]
+
     format_requests = [
         {
             "repeatCell": {
@@ -517,86 +533,6 @@ def upsert_deals(
                 },
                 "cell": {"userEnteredFormat": {"horizontalAlignment": "CENTER"}},
                 "fields": "userEnteredFormat.horizontalAlignment",
-            }
-        },
-        {
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 1,
-                    "startColumnIndex": 1,
-                    "endColumnIndex": 2,
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "numberFormat": {"type": "DATE", "pattern": "dd.MM.yyyy"}
-                    }
-                },
-                "fields": "userEnteredFormat.numberFormat",
-            }
-        },
-        {
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 1,
-                    "startColumnIndex": 2,
-                    "endColumnIndex": 3,
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "numberFormat": {"type": "NUMBER", "pattern": "#,##0.00 ₽"}
-                    }
-                },
-                "fields": "userEnteredFormat.numberFormat",
-            }
-        },
-        {
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 1,
-                    "startColumnIndex": 3,
-                    "endColumnIndex": 4,
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "numberFormat": {"type": "NUMBER", "pattern": "#,##0.00 ₽"}
-                    }
-                },
-                "fields": "userEnteredFormat.numberFormat",
-            }
-        },
-        {
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 1,
-                    "startColumnIndex": 15,
-                    "endColumnIndex": 16,
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "numberFormat": {"type": "NUMBER", "pattern": "#,##0.00 ₽"}
-                    }
-                },
-                "fields": "userEnteredFormat.numberFormat",
-            }
-        },
-        {
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 1,
-                    "startColumnIndex": 16,
-                    "endColumnIndex": 17,
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "numberFormat": {"type": "NUMBER", "pattern": "#,##0.00 ₽"}
-                    }
-                },
-                "fields": "userEnteredFormat.numberFormat",
             }
         },
         {
@@ -678,7 +614,7 @@ def upsert_deals(
                 spreadsheetId=SPREADSHEET_ID, body={"requests": delete_requests}
             ).execute()
 
-    requests = []
+    requests = list(always_requests)
     if created or apply_format:
         requests.extend(format_requests)
     if missing_rows:
@@ -864,13 +800,16 @@ def upsert_manager_deals(
         if delete_reqs:
             service.spreadsheets().batchUpdate(spreadsheetId=MANAGERS_SPREADSHEET_ID, body={"requests": delete_reqs}).execute()
 
+    mgr_always_reqs = [
+        {"repeatCell": {"range": _mgr_range(sheet_id, 1, 2, 1), "cell": {"userEnteredFormat": {"numberFormat": {"type": "DATE", "pattern": "dd.MM.yyyy"}}}, "fields": "userEnteredFormat.numberFormat"}},
+    ]
+
     format_reqs = [
         {"repeatCell": {"range": _mgr_range(sheet_id, 0, ncols, 0, 1), "cell": {"userEnteredFormat": {"textFormat": {"bold": True}, "backgroundColor": {"red": 0.776, "green": 0.878, "blue": 0.706}}}, "fields": "userEnteredFormat.textFormat.bold,userEnteredFormat.backgroundColor"}},
         {"repeatCell": {"range": _mgr_range(sheet_id, 0, ncols, 1), "cell": {"userEnteredFormat": {"textFormat": {"bold": False}}}, "fields": "userEnteredFormat.textFormat.bold"}},
         {"repeatCell": {"range": _mgr_range(sheet_id, 0, ncols), "cell": {"userEnteredFormat": {"horizontalAlignment": "CENTER"}}, "fields": "userEnteredFormat.horizontalAlignment"}},
         {"repeatCell": {"range": _mgr_range(sheet_id, 4, 5, 1), "cell": {"userEnteredFormat": {"horizontalAlignment": "LEFT"}}, "fields": "userEnteredFormat.horizontalAlignment"}},
         {"repeatCell": {"range": _mgr_range(sheet_id, 9, 10, 1), "cell": {"userEnteredFormat": {"horizontalAlignment": "LEFT"}}, "fields": "userEnteredFormat.horizontalAlignment"}},
-        {"repeatCell": {"range": _mgr_range(sheet_id, 1, 2, 1), "cell": {"userEnteredFormat": {"numberFormat": {"type": "DATE", "pattern": "dd.MM.yyyy"}}}, "fields": "userEnteredFormat.numberFormat"}},
         {"updateDimensionProperties": {"range": {"sheetId": sheet_id, "dimension": "ROWS", "startIndex": 0}, "properties": {"pixelSize": 30}, "fields": "pixelSize"}},
         *[{"updateDimensionProperties": {"range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": col, "endIndex": col + 1}, "properties": {"pixelSize": px}, "fields": "pixelSize"}} for col, px in [(2, 150), (4, 200), (9, 220), (11, 150), (12, 150)]],
         {"setDataValidation": {"range": _mgr_range(sheet_id, 13, 15, 1, last_row), "rule": {"condition": {"type": "BOOLEAN"}, "showCustomUi": True, "strict": True}}},
@@ -881,7 +820,7 @@ def upsert_manager_deals(
 
     sort_req = {"sortRange": {"range": _mgr_range(sheet_id, 0, ncols, 1, last_row), "sortSpecs": [{"dimensionIndex": 1, "sortOrder": "ASCENDING"}]}}
 
-    requests = []
+    requests = list(mgr_always_reqs)
     if created or apply_format:
         requests.extend(format_reqs)
     if missing_rows:
